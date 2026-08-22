@@ -1,0 +1,150 @@
+import React, { useState, useEffect } from "react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
+import { Upload, X } from "lucide-react";
+import { C, S } from "../theme.js";
+import { api } from "../lib/api.js";
+
+const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+
+export default function FerramentaGestao() {
+  const [record, setRecord] = useState(null); // null=loading, false=no data yet
+  const [error, setError] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    api.gestaoLatest().then((r) => setRecord(r || false));
+  }, []);
+
+  async function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const saved = await api.gestaoUpload(file);
+      setRecord(saved);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  if (record === null) return <div style={{ color: C.muted, fontSize: 13 }}>Carregando...</div>;
+
+  if (!record) {
+    return (
+      <div style={S.moduleCol}>
+        <div>
+          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Gestão</h2>
+          <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>Suba sua planilha e veja vendas, margem e estoque num único painel.</p>
+        </div>
+        <div style={{ border: `1.5px dashed ${C.border}`, borderRadius: 14, padding: 40, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+          <Upload size={28} color={C.gold} />
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15 }}>Envie um arquivo CSV</div>
+          <div style={{ fontSize: 12.5, color: C.muted, maxWidth: 380 }}>
+            Colunas esperadas: mes, categoria, produto, sku, valor, margem, estoque (ok / ruptura / excesso)
+          </div>
+          <label style={{ ...S.primaryBtnSm, cursor: "pointer" }}>
+            {uploading ? "Enviando..." : "Selecionar arquivo"}
+            <input type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} disabled={uploading} />
+          </label>
+          {error && <div style={{ color: C.danger, fontSize: 12 }}>{error}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  const rows = record.rows;
+  const byMonth = {};
+  rows.forEach((r) => { byMonth[r.mes] = (byMonth[r.mes] || 0) + r.valor; });
+  const monthData = Object.entries(byMonth).map(([mes, valor]) => ({ mes, valor }));
+
+  const byCat = {}, catCount = {};
+  rows.forEach((r) => { byCat[r.categoria] = (byCat[r.categoria] || 0) + r.margem; catCount[r.categoria] = (catCount[r.categoria] || 0) + 1; });
+  const catData = Object.entries(byCat).map(([categoria, sum]) => ({ categoria, margem: Math.round(sum / catCount[categoria]) }));
+
+  const alerts = rows.filter((r) => r.estoque === "ruptura" || r.estoque === "excesso");
+  const total = rows.reduce((s, r) => s + r.valor, 0);
+
+  return (
+    <div style={S.moduleCol}>
+      <div>
+        <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Gestão</h2>
+        <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>
+          Dados de {record.filename} · carregado em {new Date(record.createdAt).toLocaleDateString("pt-BR")}
+        </p>
+      </div>
+      <div>
+        <label style={{ ...S.ghostBtn, cursor: "pointer" }}>
+          <X size={14} /> Trocar planilha
+          <input type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} />
+        </label>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+        <StatCard label="Faturamento total" value={fmtBRL(total)} />
+        <StatCard label="Ticket médio por linha" value={fmtBRL(Math.round(total / rows.length))} />
+        <StatCard label="Alertas de estoque" value={`${alerts.length} SKUs`} tone={alerts.length ? C.danger : C.sage} />
+      </div>
+
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Faturamento por mês</div>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={monthData}>
+            <CartesianGrid stroke={C.border} vertical={false} />
+            <XAxis dataKey="mes" tick={{ fill: C.inkSoft, fontSize: 12, fontFamily: "Inter" }} axisLine={{ stroke: C.border }} tickLine={false} />
+            <YAxis tick={{ fill: C.muted, fontSize: 11, fontFamily: "Inter" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+            <Tooltip formatter={(v) => fmtBRL(v)} contentStyle={{ borderRadius: 8, border: `1px solid ${C.border}`, fontFamily: "Inter", fontSize: 13 }} />
+            <Bar dataKey="valor" fill={C.gold} radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Margem média por categoria</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {catData.map((m) => (
+              <div key={m.categoria} style={{ display: "grid", gridTemplateColumns: "130px 1fr 34px", alignItems: "center", gap: 10 }}>
+                <div style={{ fontSize: 12, color: C.inkSoft }}>{m.categoria}</div>
+                <div style={{ height: 7, background: C.border, borderRadius: 999, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${Math.min(100, m.margem * 2)}%`, background: C.sage, borderRadius: 999 }} />
+                </div>
+                <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, fontWeight: 600, textAlign: "right" }}>{m.margem}%</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Alertas de estoque</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {alerts.length === 0 && <div style={{ fontSize: 12.5, color: C.muted }}>Nenhum alerta na planilha atual.</div>}
+            {alerts.map((a, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
+                <div>
+                  <div style={{ fontSize: 12.5, fontWeight: 500 }}>{a.produto}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>{a.sku}</div>
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 999, background: a.estoque === "ruptura" ? C.dangerSoft : C.goldSoft, color: a.estoque === "ruptura" ? C.danger : C.gold }}>
+                  {a.estoque === "ruptura" ? "Ruptura" : "Excesso"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, tone }) {
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ fontSize: 11.5, color: C.muted }}>{label}</div>
+      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 19, color: tone || C.ink }}>{value}</div>
+    </div>
+  );
+}

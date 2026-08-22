@@ -1,0 +1,225 @@
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,
+} from "recharts";
+import { RefreshCw, ArrowLeft } from "lucide-react";
+import { C, S } from "../theme.js";
+import { api } from "../lib/api.js";
+import { DIMENSIONS, QUESTIONS, rangeFor, MODULE_HINT, MODULE_LABEL } from "./questions.js";
+
+export default function ComercialCoach({ goTo }) {
+  const [loading, setLoading] = useState(true);
+  const [result, setResult] = useState(null);
+  const [stage, setStage] = useState("landing");
+  const [segment, setSegment] = useState(null);
+  const [answers, setAnswers] = useState({});
+  const [dimIndex, setDimIndex] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    api.coachLatest()
+      .then((r) => { setResult(r); if (r) setStage("results"); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const questions = segment ? QUESTIONS[segment] : null;
+
+  const scores = useMemo(() => {
+    if (!questions) return null;
+    const dims = {};
+    DIMENSIONS.forEach(({ key }) => {
+      const qs = questions[key];
+      const vals = qs.map((_, i) => answers[`${key}-${i}`]).filter((v) => v !== undefined);
+      dims[key] = vals.length ? vals.reduce((a, b) => a + b, 0) / qs.length : 0;
+    });
+    const final = Math.round(DIMENSIONS.reduce((sum, d) => sum + dims[d.key] * d.weight, 0));
+    return { dims, final };
+  }, [answers, questions]);
+
+  function startQuiz(seg) { setSegment(seg); setAnswers({}); setDimIndex(0); setStage("quiz"); }
+  function answer(dimKey, qIdx, score) { setAnswers((prev) => ({ ...prev, [`${dimKey}-${qIdx}`]: score })); }
+  function currentDimAnswered(dimKey) { return questions[dimKey].every((_, i) => answers[`${dimKey}-${i}`] !== undefined); }
+
+  async function finish() {
+    setSubmitting(true);
+    const payload = {
+      segment,
+      answers: {
+        processo: questions.processo.map((_, i) => answers[`processo-${i}`]),
+        preco: questions.preco.map((_, i) => answers[`preco-${i}`]),
+        time: questions.time.map((_, i) => answers[`time-${i}`]),
+        pipeline: questions.pipeline.map((_, i) => answers[`pipeline-${i}`]),
+      },
+    };
+    const saved = await api.coachSubmit(payload);
+    setResult(saved);
+    setSubmitting(false);
+    setStage("results");
+  }
+
+  function reset() { setResult(null); setSegment(null); setAnswers({}); setStage("landing"); }
+
+  if (loading) return <ModuleLoading />;
+
+  if (stage === "landing") {
+    return (
+      <div style={S.moduleCol}>
+        <div style={S.eyebrow}>DIAGNÓSTICO GRATUITO · 5–8 MIN</div>
+        <h1 style={S.h1}>Descubra sua <span style={{ color: C.gold }}>Nota Comercial</span></h1>
+        <p style={{ ...S.lead, maxWidth: 520 }}>
+          Responda um questionário rápido sobre processo, precificação, time e estoque. No final, você recebe uma nota de 0 a 100 e as três prioridades para destravar o seu negócio.
+        </p>
+        <button style={{ ...S.primaryBtn, marginTop: 8 }} onClick={() => setStage("segment")}>Começar diagnóstico →</button>
+      </div>
+    );
+  }
+
+  if (stage === "segment") {
+    return (
+      <div style={S.moduleCol}>
+        <div style={S.eyebrow}>PASSO 1 DE 2</div>
+        <h2 style={{ ...S.h1, fontSize: 24 }}>Qual descreve melhor o seu negócio?</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, maxWidth: 640 }}>
+          <SegmentCard title="B2B / Atacado" desc="Distribuidor, importador ou indústria que vende para outras empresas." onClick={() => startQuiz("b2b")} />
+          <SegmentCard title="Varejo Especializado" desc="Loja física, e-commerce de nicho ou rede com catálogo curado." onClick={() => startQuiz("varejo")} />
+        </div>
+      </div>
+    );
+  }
+
+  if (stage === "quiz") {
+    const dim = DIMENSIONS[dimIndex];
+    const qs = questions[dim.key];
+    const progress = ((dimIndex + 1) / DIMENSIONS.length) * 100;
+    return (
+      <div style={{ ...S.moduleCol, maxWidth: 640 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, fontWeight: 600, color: C.inkSoft }}>
+            Dimensão {dimIndex + 1} de {DIMENSIONS.length} · {dim.label}
+          </div>
+          <div style={{ height: 6, background: C.border, borderRadius: 999, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${progress}%`, background: C.gold, borderRadius: 999 }} />
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {qs.map((item, i) => {
+            const key = `${dim.key}-${i}`;
+            const selected = answers[key];
+            return (
+              <div key={key} style={S.qCard}>
+                <div style={{ fontSize: 14.5, fontWeight: 500, lineHeight: 1.45 }}>{item.q}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {item.opts.map((opt, oi) => {
+                    const isSel = selected === opt.score;
+                    return (
+                      <button key={oi} onClick={() => answer(dim.key, i, opt.score)}
+                        style={{ fontSize: 13, border: "1px solid", borderRadius: 999, padding: "8px 14px", cursor: "pointer",
+                          background: isSel ? C.ink : C.card, color: isSel ? C.paper : C.inkSoft, borderColor: isSel ? C.ink : C.border }}>
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <button style={S.ghostBtn} onClick={() => (dimIndex > 0 ? setDimIndex(dimIndex - 1) : setStage("segment"))}>
+            <ArrowLeft size={14} /> Voltar
+          </button>
+          <button
+            style={{ ...S.primaryBtn, opacity: currentDimAnswered(dim.key) && !submitting ? 1 : 0.4 }}
+            disabled={!currentDimAnswered(dim.key) || submitting}
+            onClick={() => (dimIndex < DIMENSIONS.length - 1 ? setDimIndex(dimIndex + 1) : finish())}
+          >
+            {submitting ? "Calculando..." : dimIndex < DIMENSIONS.length - 1 ? "Próxima dimensão →" : "Ver minha nota →"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // results
+  const r = result
+    ? { final: result.final, dims: { processo: result.dimProcesso, preco: result.dimPreco, time: result.dimTime, pipeline: result.dimPipeline } }
+    : { final: scores.final, dims: scores.dims };
+  const range = rangeFor(r.final);
+  const dimsArr = DIMENSIONS.map((d) => ({ ...d, score: r.dims[d.key] }));
+  const weakest = [...dimsArr].sort((a, b) => a.score - b.score);
+  const top3 = weakest.slice(0, 3);
+  const radarData = dimsArr.map((d) => ({ dimension: d.label, Nota: Math.round(d.score) }));
+
+  return (
+    <div style={{ ...S.moduleCol, maxWidth: 780 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "center", background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 24 }}>
+        <div>
+          <div style={S.eyebrow}>SUA NOTA COMERCIAL</div>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 64, color: range.tone, lineHeight: 1 }}>{r.final}</div>
+          <div style={{ display: "inline-block", fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, fontWeight: 600, padding: "5px 10px", borderRadius: 999, background: range.tone + "22", color: range.tone, marginTop: 8 }}>
+            {range.label}
+          </div>
+          <p style={{ fontSize: 13, color: C.inkSoft, marginTop: 10, maxWidth: 220 }}>{range.note}</p>
+        </div>
+        <ResponsiveContainer width="100%" height={230}>
+          <RadarChart data={radarData} outerRadius={80}>
+            <PolarGrid stroke={C.border} />
+            <PolarAngleAxis dataKey="dimension" tick={{ fill: C.inkSoft, fontSize: 10.5, fontFamily: "Inter" }} />
+            <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+            <Radar dataKey="Nota" stroke={C.gold} fill={C.gold} fillOpacity={0.35} />
+          </RadarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {dimsArr.map((d) => (
+          <div key={d.key} style={{ display: "grid", gridTemplateColumns: "160px 1fr 34px", alignItems: "center", gap: 12 }}>
+            <div style={{ fontSize: 13, color: C.inkSoft }}>{d.label}</div>
+            <div style={{ height: 8, background: C.border, borderRadius: 999, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${d.score}%`, borderRadius: 999, background: top3[0].key === d.key ? C.danger : C.sage }} />
+            </div>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 13, textAlign: "right" }}>{Math.round(d.score)}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15 }}>Prioridades identificadas</div>
+        {top3.map((d, i) => (
+          <div key={d.key} style={{ display: "flex", gap: 12, fontSize: 13.5, lineHeight: 1.55, color: C.inkSoft, alignItems: "flex-start" }}>
+            <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 13, color: C.gold, background: C.goldSoft, width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</span>
+            <span>
+              <strong>{d.label}</strong> está travando seu resultado — indicamos a{" "}
+              <button onClick={() => goTo(MODULE_HINT[d.key])} style={{ background: "none", border: "none", padding: 0, color: C.gold, fontWeight: 700, cursor: "pointer", fontSize: 13.5, textDecoration: "underline" }}>
+                {MODULE_LABEL[MODULE_HINT[d.key]]}
+              </button>{" "}
+              para atacar isso primeiro.
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <button style={S.primaryBtnSm} onClick={() => api.checkout("coach_report").then((r) => (window.location.href = r.url))}>
+          Desbloquear relatório completo — R$ 147
+        </button>
+        <button style={S.ghostBtn} onClick={reset}><RefreshCw size={14} /> Refazer diagnóstico</button>
+      </div>
+    </div>
+  );
+}
+
+function SegmentCard({ title, desc, onClick }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{ textAlign: "left", background: C.card, border: `1.5px solid ${hover ? C.gold : C.border}`, borderRadius: 12, padding: 20, cursor: "pointer" }}>
+      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 16 }}>{title}</div>
+      <div style={{ fontSize: 13, color: C.inkSoft, marginTop: 8, lineHeight: 1.5 }}>{desc}</div>
+      <div style={{ fontSize: 12.5, fontWeight: 600, marginTop: 10, color: hover ? C.gold : C.muted }}>Escolher →</div>
+    </button>
+  );
+}
+function ModuleLoading() {
+  return <div style={{ color: "#8A8F9C", fontSize: 13 }}>Carregando...</div>;
+}
