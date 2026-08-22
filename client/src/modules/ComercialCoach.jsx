@@ -70,6 +70,11 @@ export default function ComercialCoach({ goTo }) {
           Responda um questionário rápido sobre processo, precificação, time e estoque. No final, você recebe uma nota de 0 a 100 e as três prioridades para destravar o seu negócio.
         </p>
         <button style={{ ...S.primaryBtn, marginTop: 8 }} onClick={() => setStage("segment")}>Começar diagnóstico →</button>
+        <div style={{ display: "flex", gap: 28, marginTop: 20, paddingTop: 20, borderTop: `1px solid ${C.border}`, width: "100%", maxWidth: 480 }}>
+          <TrustStat n="4" label="dimensões avaliadas" />
+          <TrustStat n="0–100" label="nota final" />
+          <TrustStat n="3" label="ações prioritárias" />
+        </div>
       </div>
     );
   }
@@ -199,12 +204,17 @@ export default function ComercialCoach({ goTo }) {
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 10 }}>
-        <button style={S.primaryBtnSm} onClick={() => api.checkout("coach_report").then((r) => (window.location.href = r.url))}>
-          Desbloquear relatório completo — R$ 147
+      <div style={{ background: C.ink, color: "#fff", borderRadius: 16, padding: 26, display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 18 }}>Relatório completo — R$ 147</div>
+        <p style={{ fontSize: 13.5, opacity: 0.8, lineHeight: 1.55, maxWidth: 440, margin: "0 0 10px" }}>
+          Análise detalhada de cada resposta, comparação com o benchmark do seu segmento e um plano de ação completo, não só as 3 prioridades.
+        </p>
+        <button style={S.primaryBtn} onClick={() => api.checkout("coach_report").then((r) => (window.location.href = r.url))}>
+          Desbloquear relatório completo
         </button>
-        <button style={S.ghostBtn} onClick={reset}><RefreshCw size={14} /> Refazer diagnóstico</button>
       </div>
+
+      <button style={S.ghostBtn} onClick={reset}><RefreshCw size={14} /> Refazer diagnóstico</button>
     </div>
   );
 }
@@ -222,5 +232,13 @@ function SegmentCard({ title, desc, onClick }) {
 }
 function ModuleLoading() {
   return <div style={{ color: "#8A8F9C", fontSize: 13 }}>Carregando...</div>;
+}
+function TrustStat({ n, label }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 20, color: C.gold }}>{n}</div>
+      <div style={{ fontSize: 12, color: C.muted }}>{label}</div>
+    </div>
+  );
 }
 
