@@ -223,3 +223,4 @@ function SegmentCard({ title, desc, onClick }) {
 function ModuleLoading() {
   return <div style={{ color: "#8A8F9C", fontSize: 13 }}>Carregando...</div>;
 }
+

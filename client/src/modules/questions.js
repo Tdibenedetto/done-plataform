@@ -63,3 +63,4 @@ export const RANGES = [
 export const rangeFor = (score) => RANGES.find((r) => score < r.max) || RANGES[RANGES.length - 1];
 export const MODULE_HINT = { processo: "vendas", time: "vendas", preco: "gestao", pipeline: "gestao" };
 export const MODULE_LABEL = { vendas: "Ferramenta de Vendas", gestao: "Ferramenta de Gestão" };
+

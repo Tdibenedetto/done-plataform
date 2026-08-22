@@ -15,3 +15,4 @@ export const PRICES = {
   gestao: { label: "Ferramenta de Gestão", amountCents: 24700, extraUserCents: 1900 },
   completo: { label: "Pacote Completo (Vendas + Gestão)", amountCents: 39700, extraUserCents: 3900 },
 };
+

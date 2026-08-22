@@ -25,3 +25,4 @@ export const S = {
   qCard: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, display: "flex", flexDirection: "column", gap: 12 },
   moveBtn: { border: `1px solid ${C.border}`, background: C.paper, borderRadius: 5, fontSize: 9, width: 20, height: 20, cursor: "pointer", color: C.inkSoft, display: "flex", alignItems: "center", justifyContent: "center" },
 };
+

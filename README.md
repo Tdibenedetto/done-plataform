@@ -85,3 +85,4 @@ Este repositório já inclui um `render.yaml` (Blueprint), igual ao padrão que 
 - Testar o fluxo completo localmente antes do primeiro deploy
 - Configurar o domínio próprio (donestrategy.com) apontando para o `done-client` no Render
 - Ativar os alertas de Twilio de forma automática (hoje a rota existe, mas precisa ser chamada — dá pra criar um job agendado no Render Cron para rodar diariamente e avisar sobre leads parados)
+

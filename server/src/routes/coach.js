@@ -34,3 +34,4 @@ router.get("/latest", async (req, res) => {
 });
 
 export default router;
+

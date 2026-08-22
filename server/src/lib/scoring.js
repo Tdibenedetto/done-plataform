@@ -30,3 +30,4 @@ export function computeScore(answers) {
   const final = Math.round(DIMENSIONS.reduce((sum, d) => sum + dims[d.key] * d.weight, 0));
   return { dims, final };
 }
+

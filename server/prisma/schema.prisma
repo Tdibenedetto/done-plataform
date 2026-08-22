@@ -99,3 +99,4 @@ model Payment {
 
   @@index([userId])
 }
+
