@@ -139,4 +139,3 @@ function Sidebar({ active, setActive, profile, onLogout }) {
     </aside>
   );
 }
-
