@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String          @id @default(uuid())
+  email         String          @unique
+  passwordHash  String
+  name          String
+  company       String?
+  createdAt     DateTime        @default(now())
+
+  coachResults  CoachResult[]
+  leads         Lead[]
+  goals         Goal[]
+  gestaoUploads GestaoUpload[]
+  subscriptions Subscription[]
+  payments      Payment[]
+}
+
+model CoachResult {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  segment     String   // "b2b" | "varejo"
+  dimProcesso Float
+  dimPreco    Float
+  dimTime     Float
+  dimPipeline Float
+  final       Int
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Lead {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  value     Float    @default(0)
+  owner     String   @default("Sem vendedor")
+  stage     String   @default("Novo Lead")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Goal {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendor String
+  target Float  @default(0)
+  month  String // "2026-08"
+
+  @@unique([userId, vendor, month])
+}
+
+model GestaoUpload {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  filename  String
+  rows      Json
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Subscription {
+  id                   String   @id @default(uuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module               String   // "vendas" | "gestao" | "completo"
+  status               String   // "active" | "canceled" | "past_due"
+  stripeSubscriptionId String?  @unique
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Payment {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            String   // "coach_report"
+  amountCents     Int
+  stripePaymentId String?  @unique
+  status          String   // "paid" | "pending"
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+}
