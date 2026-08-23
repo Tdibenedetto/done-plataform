@@ -65,5 +65,6 @@ Object.assign(api, {
   teamRemoveMember: (id) => request(`/team/member/${id}`, { method: "DELETE" }),
   inviteInfo: (token) => request(`/auth/invite/${token}`),
   inviteAccept: (token, data) => request(`/auth/invite/${token}/accept`, { method: "POST", body: data }),
+  leadNotesList: (id) => request(`/leads/${id}/notes`),
+  leadNoteAdd: (id, content) => request(`/leads/${id}/notes`, { method: "POST", body: { content } }),
 });
-
