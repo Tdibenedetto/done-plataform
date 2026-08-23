@@ -39,6 +39,9 @@ export const api = {
     return request("/gestao/upload", { method: "POST", body: form, isForm: true });
   },
   gestaoLatest: () => request("/gestao/latest"),
+  gestaoAll: () => request("/gestao/all"),
+  gestaoGoals: () => request("/gestao/goals"),
+  gestaoGoalSet: (data) => request("/gestao/goals", { method: "PUT", body: data }),
 
   checkout: (product) => request("/billing/checkout", { method: "POST", body: { product } }),
 };
