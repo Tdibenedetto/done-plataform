@@ -1,21 +1,37 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Upload, X } from "lucide-react";
+import { Upload, X, List, Target } from "lucide-react";
 import { C, S } from "../theme.js";
-import { api } from "../lib/api.js";
+import { api, loadSession } from "../lib/api.js";
 
 const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const MES_ABBR = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const currentMonthKey = () => new Date().toISOString().slice(0, 7);
+
+const SAMPLE_CSV = `mes,categoria,produto,sku,valor,margem,estoque
+Mar,Utilidades Domésticas,Jogo de Panelas,UD-1042,42000,34,ok
+Abr,Eletroportáteis,Liquidificador,EP-220,38000,22,ruptura
+Mai,Decoração,Vaso Cerâmica,DEC-330,29000,41,excesso
+Jun,Organização,Caixa Organizadora,ORG-018,35000,29,ruptura
+Jul,Utilidades Domésticas,Panela Pressão,UD-1090,41000,31,ok
+Ago,Decoração,Espelho Decorativo,DEC-410,26000,38,ok`;
 
 export default function FerramentaGestao() {
-  const [record, setRecord] = useState(null); // null=loading, false=no data yet
+  const isMaster = loadSession()?.user?.role === "master";
+  const [data, setData] = useState(null); // null=loading; { uploads, rows }
+  const [goals, setGoals] = useState([]);
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [showSkus, setShowSkus] = useState(false);
 
-  useEffect(() => {
-    api.gestaoLatest().then((r) => setRecord(r || false));
-  }, []);
+  async function reload() {
+    const [all, gs] = await Promise.all([api.gestaoAll(), api.gestaoGoals()]);
+    setData(all);
+    setGoals(gs);
+  }
+  useEffect(() => { reload(); }, []);
 
   async function handleFile(e) {
     const file = e.target.files[0];
@@ -23,8 +39,8 @@ export default function FerramentaGestao() {
     setUploading(true);
     setError(null);
     try {
-      const saved = await api.gestaoUpload(file);
-      setRecord(saved);
+      await api.gestaoUpload(file);
+      await reload();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -32,9 +48,28 @@ export default function FerramentaGestao() {
     }
   }
 
-  if (record === null) return <div style={{ color: C.muted, fontSize: 13 }}>Carregando...</div>;
+  async function loadSample() {
+    setUploading(true);
+    try {
+      const blob = new Blob([SAMPLE_CSV], { type: "text/csv" });
+      const file = new File([blob], "exemplo.csv", { type: "text/csv" });
+      await api.gestaoUpload(file);
+      await reload();
+    } finally {
+      setUploading(false);
+    }
+  }
 
-  if (!record) {
+  async function saveMonthGoal(value) {
+    await api.gestaoGoalSet({ month: currentMonthKey(), target: Number(value) || 0 });
+    reload();
+  }
+
+  if (data === null) return <div style={{ color: C.muted, fontSize: 13 }}>Carregando...</div>;
+
+  const rows = data.rows;
+
+  if (rows.length === 0) {
     return (
       <div style={S.moduleCol}>
         <div>
@@ -51,47 +86,97 @@ export default function FerramentaGestao() {
             {uploading ? "Enviando..." : "Selecionar arquivo"}
             <input type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} disabled={uploading} />
           </label>
+          <button style={S.ghostBtn} onClick={loadSample} disabled={uploading}>ou carregar dados de exemplo</button>
           {error && <div style={{ color: C.danger, fontSize: 12 }}>{error}</div>}
         </div>
       </div>
     );
   }
 
-  const rows = record.rows;
+  // Faturamento por mês, combinando TODOS os uploads já feitos (histórico real, não só o último envio).
   const byMonth = {};
   rows.forEach((r) => { byMonth[r.mes] = (byMonth[r.mes] || 0) + r.valor; });
-  const monthData = Object.entries(byMonth).map(([mes, valor]) => ({ mes, valor }));
+  const monthOrder = MES_ABBR.filter((m) => byMonth[m] !== undefined);
+  const monthData = monthOrder.map((mes) => ({ mes, valor: byMonth[mes] }));
 
   const byCat = {}, catCount = {};
   rows.forEach((r) => { byCat[r.categoria] = (byCat[r.categoria] || 0) + r.margem; catCount[r.categoria] = (catCount[r.categoria] || 0) + 1; });
   const catData = Object.entries(byCat).map(([categoria, sum]) => ({ categoria, margem: Math.round(sum / catCount[categoria]) }));
 
-  const alerts = rows.filter((r) => r.estoque === "ruptura" || r.estoque === "excesso");
+  // Estoque: pega o status mais recente de cada SKU (evita alerta duplicado/desatualizado entre uploads antigos).
+  const latestBySku = {};
+  rows.forEach((r) => {
+    if (!r.sku) return;
+    if (!latestBySku[r.sku] || new Date(r._uploadDate) > new Date(latestBySku[r.sku]._uploadDate)) {
+      latestBySku[r.sku] = r;
+    }
+  });
+  const alerts = Object.values(latestBySku).filter((r) => r.estoque === "ruptura" || r.estoque === "excesso");
+
   const total = rows.reduce((s, r) => s + r.valor, 0);
+  const thisMonthLabel = MES_ABBR[new Date().getMonth()];
+  const thisMonthRevenue = byMonth[thisMonthLabel] || 0;
+  const monthGoal = goals.find((g) => g.month === currentMonthKey());
+  const monthTarget = monthGoal ? monthGoal.target : 0;
+  const monthPct = monthTarget ? Math.min(100, Math.round((thisMonthRevenue / monthTarget) * 100)) : 0;
+
+  // Drill-down por SKU: agrega faturamento total e margem média de cada SKU em todos os uploads.
+  const skuAgg = {};
+  rows.forEach((r) => {
+    if (!r.sku) return;
+    if (!skuAgg[r.sku]) skuAgg[r.sku] = { sku: r.sku, produto: r.produto, categoria: r.categoria, valor: 0, margens: [] };
+    skuAgg[r.sku].valor += r.valor;
+    skuAgg[r.sku].margens.push(r.margem);
+  });
+  const skuList = Object.values(skuAgg)
+    .map((s) => ({ ...s, margemMedia: Math.round(s.margens.reduce((a, b) => a + b, 0) / s.margens.length), estoque: latestBySku[s.sku]?.estoque }))
+    .sort((a, b) => b.valor - a.valor);
 
   return (
     <div style={S.moduleCol}>
-      <div>
-        <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Gestão</h2>
-        <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>
-          Dados de {record.filename} · carregado em {new Date(record.createdAt).toLocaleDateString("pt-BR")}
-        </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Gestão</h2>
+          <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>
+            {data.uploads.length} {data.uploads.length === 1 ? "planilha enviada" : "planilhas enviadas"} · última em {new Date(data.uploads[data.uploads.length - 1].createdAt).toLocaleDateString("pt-BR")}
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={S.ghostBtn} onClick={() => setShowSkus((s) => !s)}><List size={14} /> {showSkus ? "Ocultar SKUs" : "Ver por SKU"}</button>
+          <label style={{ ...S.ghostBtn, cursor: "pointer" }}>
+            <Upload size={14} /> {uploading ? "Enviando..." : "Nova planilha"}
+            <input type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} disabled={uploading} />
+          </label>
+        </div>
       </div>
-      <div>
-        <label style={{ ...S.ghostBtn, cursor: "pointer" }}>
-          <X size={14} /> Trocar planilha
-          <input type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} />
-        </label>
+      {error && <div style={{ color: C.danger, fontSize: 12 }}>{error}</div>}
+
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", alignItems: "center", gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}><Target size={11} /> Meta do mês ({thisMonthLabel})</div>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 19 }}>
+            {fmtBRL(thisMonthRevenue)} <span style={{ fontWeight: 400, fontSize: 13, color: C.muted }}>de {fmtBRL(monthTarget)}</span>
+          </div>
+        </div>
+        <div style={{ flex: 1, height: 8, background: C.border, borderRadius: 999, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${monthPct}%`, background: C.sage, borderRadius: 999 }} />
+        </div>
+        {isMaster ? (
+          <input style={{ ...S.input, width: 120, padding: "6px 10px", fontSize: 12 }} placeholder="Meta R$"
+            defaultValue={monthTarget || ""} onBlur={(e) => saveMonthGoal(e.target.value)} />
+        ) : (
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 15, color: C.sage }}>{monthPct}%</div>
+        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
-        <StatCard label="Faturamento total" value={fmtBRL(total)} />
+        <StatCard label="Faturamento total (histórico)" value={fmtBRL(total)} />
         <StatCard label="Ticket médio por linha" value={fmtBRL(Math.round(total / rows.length))} />
         <StatCard label="Alertas de estoque" value={`${alerts.length} SKUs`} tone={alerts.length ? C.danger : C.sage} />
       </div>
 
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Faturamento por mês</div>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Faturamento por mês (todas as planilhas combinadas)</div>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={monthData}>
             <CartesianGrid stroke={C.border} vertical={false} />
@@ -122,8 +207,8 @@ export default function FerramentaGestao() {
           <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Alertas de estoque</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {alerts.length === 0 && <div style={{ fontSize: 12.5, color: C.muted }}>Nenhum alerta na planilha atual.</div>}
-            {alerts.map((a, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
+            {alerts.map((a) => (
+              <div key={a.sku} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
                 <div>
                   <div style={{ fontSize: 12.5, fontWeight: 500 }}>{a.produto}</div>
                   <div style={{ fontSize: 11, color: C.muted }}>{a.sku}</div>
@@ -136,6 +221,27 @@ export default function FerramentaGestao() {
           </div>
         </div>
       </div>
+
+      {showSkus && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Todos os SKUs (histórico combinado)</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 100px 80px 90px", gap: 8, fontSize: 10.5, color: C.muted, fontWeight: 600, padding: "0 8px 8px", borderBottom: `1px solid ${C.border}` }}>
+              <span>SKU</span><span>Produto</span><span>Categoria</span><span>Faturamento</span><span>Margem</span><span>Estoque</span>
+            </div>
+            {skuList.map((s) => (
+              <div key={s.sku} style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 100px 80px 90px", gap: 8, fontSize: 12, padding: "8px", borderBottom: `1px solid ${C.border}` }}>
+                <span style={{ color: C.muted }}>{s.sku}</span>
+                <span>{s.produto}</span>
+                <span style={{ color: C.inkSoft }}>{s.categoria}</span>
+                <span style={{ fontFamily: "'Space Grotesk',sans-serif", color: C.gold, fontWeight: 600 }}>{fmtBRL(s.valor)}</span>
+                <span>{s.margemMedia}%</span>
+                <span style={{ color: s.estoque === "ruptura" ? C.danger : s.estoque === "excesso" ? C.gold : C.sage }}>{s.estoque || "ok"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -148,4 +254,3 @@ function StatCard({ label, value, tone }) {
     </div>
   );
 }
-
