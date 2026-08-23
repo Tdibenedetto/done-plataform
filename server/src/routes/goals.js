@@ -1,20 +1,27 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
+import { requireMaster } from "../middleware/auth.js";
 
 const router = Router();
 
 router.get("/", async (req, res) => {
-  const goals = await prisma.goal.findMany({ where: { userId: req.userId } });
+  const where = req.userRole === "master"
+    ? { organizationId: req.organizationId }
+    : { organizationId: req.organizationId, userId: req.userId };
+  const goals = await prisma.goal.findMany({ where, include: { user: { select: { id: true, name: true } } } });
   res.json(goals);
 });
 
-router.put("/", async (req, res) => {
-  const { vendor, target, month } = req.body;
-  if (!vendor || !month) return res.status(400).json({ error: "Vendedor e mês são obrigatórios." });
+// Apenas o Master define metas do time.
+router.put("/", requireMaster, async (req, res) => {
+  const { userId, target, month } = req.body;
+  if (!userId || !month) return res.status(400).json({ error: "Vendedor e mês são obrigatórios." });
+
+  const target_ = Number(target) || 0;
   const goal = await prisma.goal.upsert({
-    where: { userId_vendor_month: { userId: req.userId, vendor, month } },
-    update: { target: Number(target) || 0 },
-    create: { userId: req.userId, vendor, month, target: Number(target) || 0 },
+    where: { userId_month: { userId, month } },
+    update: { target: target_ },
+    create: { organizationId: req.organizationId, userId, month, target: target_ },
   });
   res.json(goal);
 });

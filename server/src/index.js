@@ -10,6 +10,7 @@ import goalsRoutes from "./routes/goals.js";
 import gestaoRoutes from "./routes/gestao.js";
 import billingRoutes, { } from "./routes/billing.js";
 import alertsRoutes from "./routes/alerts.js";
+import teamRoutes from "./routes/team.js";
 import { requireAuth } from "./middleware/auth.js";
 
 const app = express();
@@ -29,6 +30,7 @@ app.use("/api/goals", requireAuth, goalsRoutes);
 app.use("/api/gestao", requireAuth, gestaoRoutes);
 app.use("/api/billing", (req, res, next) => (req.path === "/webhook" ? next() : requireAuth(req, res, next)), billingRoutes);
 app.use("/api/alerts", requireAuth, alertsRoutes);
+app.use("/api/team", requireAuth, teamRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

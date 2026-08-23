@@ -2,11 +2,12 @@ import { Router } from "express";
 import express from "express";
 import { prisma } from "../lib/prisma.js";
 import { stripe, PRICES } from "../lib/stripe.js";
+import { requireMaster } from "../middleware/auth.js";
 
 const router = Router();
 
-// Creates a Stripe Checkout session for either the one-off report or a module subscription.
-router.post("/checkout", async (req, res) => {
+// Apenas o Master assina/compra módulos para a organização.
+router.post("/checkout", requireMaster, async (req, res) => {
   const { product } = req.body; // "coach_report" | "vendas" | "gestao" | "completo"
   const price = PRICES[product];
   if (!price) return res.status(400).json({ error: "Produto inválido." });
@@ -28,7 +29,7 @@ router.post("/checkout", async (req, res) => {
         quantity: 1,
       },
     ],
-    metadata: { userId: req.userId, product },
+    metadata: { organizationId: req.organizationId, product },
     success_url: `${process.env.CLIENT_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${process.env.CLIENT_URL}/billing/cancel`,
   });
@@ -36,7 +37,7 @@ router.post("/checkout", async (req, res) => {
   res.json({ url: session.url });
 });
 
-// Stripe webhook — must receive the RAW body, so it's mounted with express.raw() in index.js.
+// Stripe webhook — recebe o body RAW, montado com express.raw() em index.js.
 router.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
   let event;
   try {
@@ -48,23 +49,21 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
-    const { userId, product } = session.metadata || {};
-    if (!userId || !product) return res.json({ received: true });
+    const { organizationId, product } = session.metadata || {};
+    if (!organizationId || !product) return res.json({ received: true });
 
     if (product === "coach_report") {
       await prisma.payment.create({
         data: {
-          userId, type: "coach_report", amountCents: session.amount_total,
+          organizationId, type: "coach_report", amountCents: session.amount_total,
           stripePaymentId: session.payment_intent, status: "paid",
         },
       });
     } else {
       await prisma.subscription.create({
-        data: {
-          userId, module: product, status: "active",
-          stripeSubscriptionId: session.subscription,
-        },
+        data: { organizationId, module: product, status: "active", stripeSubscriptionId: session.subscription },
       });
+      await prisma.organization.update({ where: { id: organizationId }, data: { plan: product } });
     }
   }
 
@@ -73,8 +72,8 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
 
 router.get("/status", async (req, res) => {
   const [payments, subscriptions] = await Promise.all([
-    prisma.payment.findMany({ where: { userId: req.userId } }),
-    prisma.subscription.findMany({ where: { userId: req.userId } }),
+    prisma.payment.findMany({ where: { organizationId: req.organizationId } }),
+    prisma.subscription.findMany({ where: { organizationId: req.organizationId } }),
   ]);
   res.json({ payments, subscriptions });
 });

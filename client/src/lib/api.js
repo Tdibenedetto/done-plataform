@@ -57,3 +57,13 @@ export function clearSession() {
   localStorage.removeItem("done-user");
 }
 
+// Equipe / convites (adicionado na evolução multiusuário)
+Object.assign(api, {
+  teamGet: () => request("/team"),
+  teamInvite: (email) => request("/team/invite", { method: "POST", body: { email } }),
+  teamRevokeInvite: (id) => request(`/team/invite/${id}`, { method: "DELETE" }),
+  teamRemoveMember: (id) => request(`/team/member/${id}`, { method: "DELETE" }),
+  inviteInfo: (token) => request(`/auth/invite/${token}`),
+  inviteAccept: (token, data) => request(`/auth/invite/${token}/accept`, { method: "POST", body: data }),
+});
+

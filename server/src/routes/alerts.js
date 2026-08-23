@@ -10,7 +10,10 @@ router.post("/follow-up/:leadId", async (req, res) => {
   const { to } = req.body; // phone number in E.164, e.g. +5511999999999
   if (!to) return res.status(400).json({ error: "Número de destino é obrigatório." });
 
-  const lead = await prisma.lead.findFirst({ where: { id: req.params.leadId, userId: req.userId } });
+  const where = req.userRole === "master"
+    ? { id: req.params.leadId, organizationId: req.organizationId }
+    : { id: req.params.leadId, organizationId: req.organizationId, assignedUserId: req.userId };
+  const lead = await prisma.lead.findFirst({ where });
   if (!lead) return res.status(404).json({ error: "Lead não encontrado." });
 
   const body = `D.O.N.E — Lembrete de follow-up\n"${lead.name}" (${lead.stage}) está parado há um tempo. Hora de retomar o contato.`;

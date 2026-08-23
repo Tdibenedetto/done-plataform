@@ -12,6 +12,13 @@ export default function App() {
   const [session, setSession] = useState(() => loadSession());
   const [activeModule, setActiveModule] = useState("coach");
 
+  // Rota pública de convite: /convite/:token (funciona mesmo sem sessão ativa)
+  const path = window.location.pathname;
+  if (path.startsWith("/convite/")) {
+    const token = path.replace("/convite/", "");
+    return <InviteAcceptScreen token={token} onAuth={(t, u) => { saveSession(t, u); setSession({ token: t, user: u }); window.history.replaceState(null, "", "/"); }} />;
+  }
+
   if (!session) {
     return <AuthScreen onAuth={(token, user) => { saveSession(token, user); setSession({ token, user }); }} />;
   }
@@ -29,6 +36,61 @@ export default function App() {
         {activeModule === "coach" && <ComercialCoach goTo={setActiveModule} />}
         {activeModule === "vendas" && <FerramentaVendas />}
         {activeModule === "gestao" && <FerramentaGestao />}
+      </div>
+    </div>
+  );
+}
+
+function InviteAcceptScreen({ token, onAuth }) {
+  const [info, setInfo] = useState(null); // null=loading, false=inválido
+  const [form, setForm] = useState({ name: "", password: "" });
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.inviteInfo(token).then(setInfo).catch(() => setInfo(false));
+  }, [token]);
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { token: t, user } = await api.inviteAccept(token, form);
+      onAuth(t, user);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (info === null) return <div style={{ ...S.app, alignItems: "center", justifyContent: "center" }}><style>{FONT}</style></div>;
+
+  if (info === false) {
+    return (
+      <div style={{ ...S.app, alignItems: "center", justifyContent: "center" }}>
+        <style>{FONT}</style>
+        <div style={{ textAlign: "center" }}>
+          <div style={S.wordmark}>D.O.N.E</div>
+          <p style={{ ...S.lead, marginTop: 16 }}>Esse convite é inválido ou já expirou.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ ...S.app, alignItems: "center", justifyContent: "center" }}>
+      <style>{FONT}</style>
+      <div style={{ maxWidth: 380, width: "100%", padding: 32 }}>
+        <div style={S.wordmark}>D.O.N.E</div>
+        <h1 style={{ ...S.h1, fontSize: 24, marginTop: 16 }}>Bem-vindo à {info.orgName}</h1>
+        <p style={{ ...S.lead, marginBottom: 22 }}>Você foi convidado como vendedor. Crie sua senha para {info.email}.</p>
+        <input style={S.input} placeholder="Seu nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input style={{ ...S.input, marginTop: 10 }} placeholder="Crie uma senha" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+        {error && <div style={{ color: C.danger, fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+        <button style={{ ...S.primaryBtn, marginTop: 16, width: "100%", justifyContent: "center", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={submit}>
+          {busy ? "Aguarde..." : "Entrar na equipe →"}
+        </button>
       </div>
     </div>
   );
@@ -109,10 +171,11 @@ function AuthScreen({ onAuth }) {
 }
 
 function Sidebar({ active, setActive, profile, onLogout }) {
+  const isMaster = profile.role === "master";
   const items = [
     { key: "coach", label: "Comercial Coach", sub: "Diagnóstico", icon: Activity },
     { key: "vendas", label: "Ferramenta de Vendas", sub: "Pipeline & Metas", icon: Trello },
-    { key: "gestao", label: "Ferramenta de Gestão", sub: "Dashboard & Estoque", icon: BarChart2 },
+    ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gestão", sub: "Dashboard & Estoque", icon: BarChart2 }] : []),
   ];
   return (
     <aside style={S.sidebar}>
@@ -139,3 +202,4 @@ function Sidebar({ active, setActive, profile, onLogout }) {
     </aside>
   );
 }
+

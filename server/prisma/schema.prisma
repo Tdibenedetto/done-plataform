@@ -7,96 +7,130 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id            String          @id @default(uuid())
-  email         String          @unique
-  passwordHash  String
-  name          String
-  company       String?
-  createdAt     DateTime        @default(now())
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  plan      String?  // "vendas" | "gestao" | "completo" | null (sem assinatura ainda)
+  createdAt DateTime @default(now())
 
-  coachResults  CoachResult[]
+  users         User[]
+  invites       Invite[]
   leads         Lead[]
   goals         Goal[]
+  coachResults  CoachResult[]
   gestaoUploads GestaoUpload[]
   subscriptions Subscription[]
   payments      Payment[]
 }
 
-model CoachResult {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  segment     String   // "b2b" | "varejo"
-  dimProcesso Float
-  dimPreco    Float
-  dimTime     Float
-  dimPipeline Float
-  final       Int
-  createdAt   DateTime @default(now())
+model User {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String       @unique
+  passwordHash   String
+  name           String
+  role           String       @default("master") // "master" | "member"
+  createdAt      DateTime     @default(now())
 
-  @@index([userId])
+  assignedLeads Lead[]
+  goals         Goal[]
+
+  @@index([organizationId])
+}
+
+model Invite {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  token          String       @unique
+  status         String       @default("pending") // "pending" | "accepted"
+  createdAt      DateTime     @default(now())
+  expiresAt      DateTime
+
+  @@index([organizationId])
+}
+
+model CoachResult {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  segment        String   // "b2b" | "varejo"
+  dimProcesso    Float
+  dimPreco       Float
+  dimTime        Float
+  dimPipeline    Float
+  final          Int
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
 }
 
 model Lead {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  value     Float    @default(0)
-  owner     String   @default("Sem vendedor")
-  stage     String   @default("Novo Lead")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedUserId String?
+  assignedUser   User?        @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  name           String
+  value          Float        @default(0)
+  stage          String       @default("Novo Lead")
+  lostReason     String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
-  @@index([userId])
+  @@index([organizationId])
+  @@index([assignedUserId])
 }
 
 model Goal {
-  id     String @id @default(uuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  vendor String
-  target Float  @default(0)
-  month  String // "2026-08"
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  target         Float        @default(0)
+  month          String // "2026-08"
 
-  @@unique([userId, vendor, month])
+  @@unique([userId, month])
+  @@index([organizationId])
 }
 
 model GestaoUpload {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  filename  String
-  rows      Json
-  createdAt DateTime @default(now())
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  filename       String
+  rows           Json
+  createdAt      DateTime     @default(now())
 
-  @@index([userId])
+  @@index([organizationId])
 }
 
 model Subscription {
-  id                   String   @id @default(uuid())
-  userId               String
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                   String       @id @default(uuid())
+  organizationId       String
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   module               String   // "vendas" | "gestao" | "completo"
   status               String   // "active" | "canceled" | "past_due"
   stripeSubscriptionId String?  @unique
   currentPeriodEnd     DateTime?
   createdAt            DateTime @default(now())
 
-  @@index([userId])
+  @@index([organizationId])
 }
 
 model Payment {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String       @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   type            String   // "coach_report"
   amountCents     Int
   stripePaymentId String?  @unique
   status          String   // "paid" | "pending"
   createdAt       DateTime @default(now())
 
-  @@index([userId])
+  @@index([organizationId])
 }
 

@@ -22,14 +22,14 @@ router.post("/upload", upload.single("file"), async (req, res) => {
   }));
 
   const record = await prisma.gestaoUpload.create({
-    data: { userId: req.userId, filename: req.file.originalname, rows },
+    data: { organizationId: req.organizationId, filename: req.file.originalname, rows },
   });
   res.json(record);
 });
 
 router.get("/latest", async (req, res) => {
   const record = await prisma.gestaoUpload.findFirst({
-    where: { userId: req.userId },
+    where: { organizationId: req.organizationId },
     orderBy: { createdAt: "desc" },
   });
   res.json(record || null);

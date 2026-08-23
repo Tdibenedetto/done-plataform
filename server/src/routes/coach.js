@@ -13,7 +13,7 @@ router.post("/submit", async (req, res) => {
 
   const result = await prisma.coachResult.create({
     data: {
-      userId: req.userId,
+      organizationId: req.organizationId,
       segment,
       dimProcesso: dims.processo,
       dimPreco: dims.preco,
@@ -27,7 +27,7 @@ router.post("/submit", async (req, res) => {
 
 router.get("/latest", async (req, res) => {
   const result = await prisma.coachResult.findFirst({
-    where: { userId: req.userId },
+    where: { organizationId: req.organizationId },
     orderBy: { createdAt: "desc" },
   });
   res.json(result || null);

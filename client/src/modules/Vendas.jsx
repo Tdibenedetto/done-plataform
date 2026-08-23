@@ -1,48 +1,63 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, UserPlus, X, Mail } from "lucide-react";
 import { C, S } from "../theme.js";
-import { api } from "../lib/api.js";
+import { api, loadSession } from "../lib/api.js";
 
-const STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação", "Fechado"];
+const STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação", "Fechado", "Perdido"];
 const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const currentMonth = () => new Date().toISOString().slice(0, 7); // "2026-08"
 
 export default function FerramentaVendas() {
+  const session = loadSession();
+  const isMaster = session?.user?.role === "master";
+
   const [leads, setLeads] = useState(null);
   const [goals, setGoals] = useState([]);
+  const [team, setTeam] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [draft, setDraft] = useState({ name: "", value: "", owner: "" });
+  const [showTeam, setShowTeam] = useState(false);
+  const [draft, setDraft] = useState({ name: "", value: "", assignedUserId: "" });
+  const [lostFor, setLostFor] = useState(null); // lead sendo marcado como perdido
+  const [lostReason, setLostReason] = useState("");
 
   const reload = useCallback(async () => {
-    const [ls, gs] = await Promise.all([api.leadsList(), api.goalsList()]);
+    const calls = [api.leadsList(), api.goalsList(), api.teamGet()];
+    const [ls, gs, tm] = await Promise.all(calls);
     setLeads(ls);
     setGoals(gs);
+    setTeam(tm);
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
 
-  if (leads === null) return <div style={{ color: C.muted, fontSize: 13 }}>Carregando...</div>;
+  if (leads === null || team === null) return <div style={{ color: C.muted, fontSize: 13 }}>Carregando...</div>;
 
   async function addLead() {
     if (!draft.name.trim()) return;
-    await api.leadCreate({ name: draft.name, value: Number(draft.value) || 0, owner: draft.owner || "Sem vendedor" });
-    setDraft({ name: "", value: "", owner: "" });
+    await api.leadCreate({ name: draft.name, value: Number(draft.value) || 0, assignedUserId: draft.assignedUserId || undefined });
+    setDraft({ name: "", value: "", assignedUserId: "" });
     setShowForm(false);
     reload();
   }
   async function moveLead(lead, dir) {
     const idx = STAGES.indexOf(lead.stage);
-    const next = STAGES[Math.min(Math.max(idx + dir, 0), STAGES.length - 1)];
+    const next = STAGES[Math.min(Math.max(idx + dir, 0), STAGES.length - 2)]; // não avança automaticamente para "Perdido"
     await api.leadUpdate(lead.id, { stage: next });
     reload();
   }
+  async function markLost(lead) {
+    setLostFor(null);
+    await api.leadUpdate(lead.id, { stage: "Perdido", lostReason });
+    setLostReason("");
+    reload();
+  }
   async function removeLead(id) { await api.leadDelete(id); reload(); }
-  async function setGoal(vendor, value) {
-    await api.goalSet({ vendor, target: Number(value) || 0, month: currentMonth() });
+  async function setGoal(userId, value) {
+    await api.goalSet({ userId, target: Number(value) || 0, month: currentMonth() });
     reload();
   }
 
-  const vendors = [...new Set(leads.map((l) => l.owner))];
+  const activeStages = STAGES.filter((s) => s !== "Perdido");
   const totalClosed = leads.filter((l) => l.stage === "Fechado").reduce((s, l) => s + l.value, 0);
   const monthGoals = goals.filter((g) => g.month === currentMonth());
   const overallTarget = monthGoals.reduce((s, g) => s + g.target, 0) || 1;
@@ -50,10 +65,19 @@ export default function FerramentaVendas() {
 
   return (
     <div style={S.moduleCol}>
-      <div>
-        <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Vendas</h2>
-        <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>Pipeline visual, leads e metas — salvos no seu banco de dados.</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Vendas</h2>
+          <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>
+            {isMaster ? "Pipeline do time — leads, metas e equipe." : "Seu pipeline e suas metas."}
+          </p>
+        </div>
+        {isMaster && (
+          <button style={S.ghostBtn} onClick={() => setShowTeam((s) => !s)}><UserPlus size={14} /> Equipe</button>
+        )}
       </div>
+
+      {isMaster && showTeam && <TeamPanel team={team} onChange={reload} />}
 
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", alignItems: "center", gap: 16 }}>
         <div>
@@ -77,13 +101,20 @@ export default function FerramentaVendas() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input style={{ ...S.input, flex: 1, minWidth: 160 }} placeholder="Nome do cliente" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           <input style={{ ...S.input, width: 150 }} placeholder="Valor (R$)" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} />
-          <input style={{ ...S.input, width: 150 }} placeholder="Vendedor" value={draft.owner} onChange={(e) => setDraft({ ...draft, owner: e.target.value })} />
+          {isMaster && (
+            <select style={{ ...S.input, width: 170 }} value={draft.assignedUserId} onChange={(e) => setDraft({ ...draft, assignedUserId: e.target.value })}>
+              <option value="">Atribuir a mim</option>
+              {team.users.filter((u) => u.id !== loadSession().user.id).map((u) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          )}
           <button style={S.primaryBtnSm} onClick={addLead}>Adicionar</button>
         </div>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
-        {STAGES.map((stage) => (
+        {activeStages.map((stage) => (
           <div key={stage} style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
             <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, fontWeight: 600, color: C.inkSoft, display: "flex", justifyContent: "space-between", borderBottom: `2px solid ${C.border}`, paddingBottom: 8 }}>
               {stage}<span style={{ color: C.muted, fontWeight: 500 }}>{leads.filter((l) => l.stage === stage).length}</span>
@@ -94,10 +125,13 @@ export default function FerramentaVendas() {
                   <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3 }}>{l.name}</div>
                   <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, color: C.gold, fontWeight: 600 }}>{fmtBRL(l.value)}</div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 10.5, color: C.muted }}>{l.owner}</span>
+                    <span style={{ fontSize: 10.5, color: C.muted }}>{l.assignedUser?.name || "—"}</span>
                     <span style={{ display: "flex", gap: 4 }}>
-                      <button style={S.moveBtn} disabled={stage === STAGES[0]} onClick={() => moveLead(l, -1)}>◀</button>
-                      <button style={S.moveBtn} disabled={stage === STAGES[STAGES.length - 1]} onClick={() => moveLead(l, 1)}>▶</button>
+                      <button style={S.moveBtn} disabled={stage === activeStages[0]} onClick={() => moveLead(l, -1)}>◀</button>
+                      <button style={S.moveBtn} disabled={stage === "Fechado"} onClick={() => moveLead(l, 1)}>▶</button>
+                      {stage !== "Fechado" && (
+                        <button style={{ ...S.moveBtn, color: C.danger }} title="Marcar como perdido" onClick={() => setLostFor(l)}>✕</button>
+                      )}
                       <button style={{ ...S.moveBtn, color: C.danger }} onClick={() => removeLead(l.id)}><Trash2 size={10} /></button>
                     </span>
                   </div>
@@ -108,27 +142,119 @@ export default function FerramentaVendas() {
         ))}
       </div>
 
-      {vendors.length > 0 && (
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Metas por vendedor (mês atual)</div>
-          {vendors.map((v) => {
-            const closed = leads.filter((l) => l.owner === v && l.stage === "Fechado").reduce((s, l) => s + l.value, 0);
-            const goal = monthGoals.find((g) => g.vendor === v);
-            const target = goal ? goal.target : 0;
-            const p = target ? Math.min(100, Math.round((closed / target) * 100)) : 0;
-            return (
-              <div key={v} style={{ display: "grid", gridTemplateColumns: "120px 1fr 140px", alignItems: "center", gap: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>{v}</div>
-                <div style={{ height: 8, background: C.border, borderRadius: 999, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${p}%`, background: C.sage, borderRadius: 999 }} />
-                </div>
-                <input style={{ ...S.input, padding: "6px 10px", fontSize: 12 }} placeholder="Meta R$"
-                  defaultValue={target || ""} onBlur={(e) => setGoal(v, e.target.value)} />
+      {leads.some((l) => l.stage === "Perdido") && (
+        <div style={{ background: C.dangerSoft, borderRadius: 12, padding: 16 }}>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 13, color: C.danger, marginBottom: 10 }}>Perdidos</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {leads.filter((l) => l.stage === "Perdido").map((l) => (
+              <div key={l.id} style={{ fontSize: 12, color: C.inkSoft, display: "flex", justifyContent: "space-between" }}>
+                <span><strong>{l.name}</strong> · {fmtBRL(l.value)} {l.lostReason ? `— ${l.lostReason}` : ""}</span>
+                <button style={{ ...S.moveBtn, color: C.danger }} onClick={() => removeLead(l.id)}><Trash2 size={10} /></button>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       )}
+
+      {lostFor && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(28,33,48,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
+          <div style={{ background: C.card, borderRadius: 14, padding: 24, width: 360 }}>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Marcar "{lostFor.name}" como perdido</div>
+            <input style={S.input} placeholder="Motivo (opcional)" value={lostReason} onChange={(e) => setLostReason(e.target.value)} />
+            <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
+              <button style={S.ghostBtn} onClick={() => { setLostFor(null); setLostReason(""); }}>Cancelar</button>
+              <button style={{ ...S.primaryBtnSm, background: C.danger }} onClick={() => markLost(lostFor)}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Metas do time (mês atual)</div>
+        {team.users.map((u) => {
+          const closed = leads.filter((l) => l.assignedUser?.id === u.id && l.stage === "Fechado").reduce((s, l) => s + l.value, 0);
+          const goal = monthGoals.find((g) => g.user?.id === u.id);
+          const target = goal ? goal.target : 0;
+          const p = target ? Math.min(100, Math.round((closed / target) * 100)) : 0;
+          return (
+            <div key={u.id} style={{ display: "grid", gridTemplateColumns: "140px 1fr 140px", alignItems: "center", gap: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>{u.name} {u.role === "master" && <span style={{ color: C.muted, fontSize: 10.5 }}>(master)</span>}</div>
+              <div style={{ height: 8, background: C.border, borderRadius: 999, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${p}%`, background: C.sage, borderRadius: 999 }} />
+              </div>
+              {isMaster ? (
+                <input style={{ ...S.input, padding: "6px 10px", fontSize: 12 }} placeholder="Meta R$"
+                  defaultValue={target || ""} onBlur={(e) => setGoal(u.id, e.target.value)} />
+              ) : (
+                <div style={{ fontSize: 12, color: C.muted }}>{fmtBRL(target)}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TeamPanel({ team, onChange }) {
+  const [email, setEmail] = useState("");
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  async function invite() {
+    if (!email.trim()) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api.teamInvite(email.trim());
+      setMsg(r.emailSent ? "Convite enviado por e-mail." : `E-mail não configurado — copie o link: ${r.inviteLink}`);
+      setEmail("");
+      onChange();
+    } catch (e) {
+      setMsg(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function revoke(id) { await api.teamRevokeInvite(id); onChange(); }
+  async function remove(id) { await api.teamRemoveMember(id); onChange(); }
+
+  const slotsUsed = team.users.length + team.invites.length;
+  const slotsLeft = team.maxTeamSize - slotsUsed;
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Equipe</div>
+        <div style={{ fontSize: 11.5, color: C.muted }}>{slotsUsed}/{team.maxTeamSize} vagas usadas</div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {team.users.map((u) => (
+          <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
+            <span>{u.name} <span style={{ color: C.muted }}>· {u.email} · {u.role === "master" ? "Master" : "Vendedor"}</span></span>
+            {u.role !== "master" && (
+              <button style={{ ...S.moveBtn, color: C.danger }} onClick={() => remove(u.id)}><Trash2 size={10} /></button>
+            )}
+          </div>
+        ))}
+        {team.invites.map((inv) => (
+          <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, color: C.muted }}>
+            <span><Mail size={11} style={{ verticalAlign: -1, marginRight: 4 }} />{inv.email} · convite pendente</span>
+            <button style={S.moveBtn} onClick={() => revoke(inv.id)}><X size={10} /></button>
+          </div>
+        ))}
+      </div>
+
+      {slotsLeft > 0 ? (
+        <div style={{ display: "flex", gap: 8 }}>
+          <input style={{ ...S.input, flex: 1 }} placeholder="E-mail do vendedor" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <button style={S.primaryBtnSm} disabled={busy} onClick={invite}>{busy ? "Enviando..." : "Convidar"}</button>
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: C.muted }}>Vagas do plano esgotadas.</div>
+      )}
+      {msg && <div style={{ fontSize: 11.5, color: C.inkSoft, wordBreak: "break-all" }}>{msg}</div>}
     </div>
   );
 }
