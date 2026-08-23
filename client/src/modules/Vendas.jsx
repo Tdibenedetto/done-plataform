@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Trash2, UserPlus, X, Mail, MessageSquare, Calendar, Filter } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Plus, Trash2, UserPlus, X, Mail, MessageSquare, Calendar, Filter, TrendingUp } from "lucide-react";
 import { C, S } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
 
@@ -16,6 +17,7 @@ export default function FerramentaVendas() {
   const [team, setTeam] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [showTeam, setShowTeam] = useState(false);
+  const [showMetrics, setShowMetrics] = useState(false);
   const [draft, setDraft] = useState({ name: "", value: "", assignedUserId: "", expectedCloseDate: "" });
   const [lostFor, setLostFor] = useState(null); // lead sendo marcado como perdido
   const [lostReason, setLostReason] = useState("");
@@ -98,12 +100,16 @@ export default function FerramentaVendas() {
             {isMaster ? "Pipeline do time — leads, metas e equipe." : "Seu pipeline e suas metas."}
           </p>
         </div>
-        {isMaster && (
-          <button style={S.ghostBtn} onClick={() => setShowTeam((s) => !s)}><UserPlus size={14} /> Equipe</button>
-        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={S.ghostBtn} onClick={() => setShowMetrics((s) => !s)}><TrendingUp size={14} /> Métricas</button>
+          {isMaster && (
+            <button style={S.ghostBtn} onClick={() => setShowTeam((s) => !s)}><UserPlus size={14} /> Equipe</button>
+          )}
+        </div>
       </div>
 
       {isMaster && showTeam && <TeamPanel team={team} onChange={reload} />}
+      {showMetrics && <MetricsPanel leads={leads} />}
 
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", alignItems: "center", gap: 16 }}>
         <div>
@@ -333,6 +339,72 @@ function LeadDetailModal({ lead, onClose }) {
           />
           <button style={S.primaryBtnSm} disabled={busy} onClick={addNote}>Adicionar</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricsPanel({ leads }) {
+  const metrics = useMemo(() => {
+    const closed = leads.filter((l) => l.stage === "Fechado");
+    const lost = leads.filter((l) => l.stage === "Perdido");
+    const decided = closed.length + lost.length;
+    const winRate = decided ? Math.round((closed.length / decided) * 100) : null;
+
+    const avgTicket = closed.length ? closed.reduce((s, l) => s + l.value, 0) / closed.length : 0;
+
+    const cycles = closed
+      .map((l) => (new Date(l.updatedAt) - new Date(l.createdAt)) / (1000 * 60 * 60 * 24))
+      .filter((d) => d >= 0);
+    const avgCycle = cycles.length ? Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length) : null;
+
+    const funnel = STAGES.filter((s) => s !== "Perdido").map((stage) => ({
+      stage,
+      leads: leads.filter((l) => l.stage === stage).length,
+    }));
+
+    return { winRate, avgTicket, avgCycle, funnel, decided };
+  }, [leads]);
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Métricas de conversão</div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+        <div style={{ background: C.paper, borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 11, color: C.muted }}>Taxa de conversão</div>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22, color: C.sage }}>
+            {metrics.winRate === null ? "—" : `${metrics.winRate}%`}
+          </div>
+          <div style={{ fontSize: 10.5, color: C.muted }}>{metrics.decided} negócios decididos</div>
+        </div>
+        <div style={{ background: C.paper, borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 11, color: C.muted }}>Ticket médio</div>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22, color: C.gold }}>
+            {fmtBRL(metrics.avgTicket)}
+          </div>
+          <div style={{ fontSize: 10.5, color: C.muted }}>por negócio fechado</div>
+        </div>
+        <div style={{ background: C.paper, borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 11, color: C.muted }}>Ciclo médio de venda</div>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22, color: C.ink }}>
+            {metrics.avgCycle === null ? "—" : `${metrics.avgCycle} dias`}
+          </div>
+          <div style={{ fontSize: 10.5, color: C.muted }}>do cadastro ao fechamento</div>
+        </div>
+      </div>
+
+      <div>
+        <div style={{ fontSize: 11.5, color: C.inkSoft, marginBottom: 8 }}>Distribuição do pipeline por etapa</div>
+        <ResponsiveContainer width="100%" height={160}>
+          <BarChart data={metrics.funnel}>
+            <CartesianGrid stroke={C.border} vertical={false} />
+            <XAxis dataKey="stage" tick={{ fill: C.inkSoft, fontSize: 10.5, fontFamily: "Inter" }} axisLine={{ stroke: C.border }} tickLine={false} />
+            <YAxis allowDecimals={false} tick={{ fill: C.muted, fontSize: 10.5, fontFamily: "Inter" }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${C.border}`, fontFamily: "Inter", fontSize: 12 }} />
+            <Bar dataKey="leads" fill={C.gold} radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
