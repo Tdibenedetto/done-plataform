@@ -5,6 +5,7 @@ import { C, S } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
 
 const STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação", "Fechado", "Perdido"];
+const MONTHS_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const currentMonth = () => new Date().toISOString().slice(0, 7); // "2026-08"
 
@@ -18,6 +19,7 @@ export default function FerramentaVendas() {
   const [showForm, setShowForm] = useState(false);
   const [showTeam, setShowTeam] = useState(false);
   const [showMetrics, setShowMetrics] = useState(false);
+  const [showAnnual, setShowAnnual] = useState(false);
   const [draft, setDraft] = useState({ name: "", value: "", assignedUserId: "", expectedCloseDate: "" });
   const [lostFor, setLostFor] = useState(null); // lead sendo marcado como perdido
   const [lostReason, setLostReason] = useState("");
@@ -101,6 +103,7 @@ export default function FerramentaVendas() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <button style={S.ghostBtn} onClick={() => setShowAnnual((s) => !s)}><Calendar size={14} /> Meta anual</button>
           <button style={S.ghostBtn} onClick={() => setShowMetrics((s) => !s)}><TrendingUp size={14} /> Métricas</button>
           {isMaster && (
             <button style={S.ghostBtn} onClick={() => setShowTeam((s) => !s)}><UserPlus size={14} /> Equipe</button>
@@ -110,6 +113,7 @@ export default function FerramentaVendas() {
 
       {isMaster && showTeam && <TeamPanel team={team} onChange={reload} />}
       {showMetrics && <MetricsPanel leads={leads} />}
+      {showAnnual && <AnnualGoalsPanel team={team} goals={goals} leads={leads} isMaster={isMaster} onChange={reload} />}
 
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", alignItems: "center", gap: 16 }}>
         <div>
@@ -406,6 +410,80 @@ function MetricsPanel({ leads }) {
           </BarChart>
         </ResponsiveContainer>
       </div>
+    </div>
+  );
+}
+
+function AnnualGoalsPanel({ team, goals, leads, isMaster, onChange }) {
+  const year = new Date().getFullYear();
+  const [local, setLocal] = useState({}); // "userId-mm" -> valor digitado (rascunho)
+  const [saving, setSaving] = useState(null);
+
+  function goalFor(userId, mm) {
+    const key = `${userId}-${mm}`;
+    if (local[key] !== undefined) return local[key];
+    const month = `${year}-${mm}`;
+    const g = goals.find((g) => g.user?.id === userId && g.month === month);
+    return g ? String(g.target) : "";
+  }
+
+  async function saveGoal(userId, mm, value) {
+    setSaving(`${userId}-${mm}`);
+    await api.goalSet({ userId, target: Number(value) || 0, month: `${year}-${mm}` });
+    setSaving(null);
+    onChange();
+  }
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Meta anual {year} {!isMaster && <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(somente leitura)</span>}</div>
+
+      {team.users.map((u) => {
+        const annualTarget = MONTHS_PT.reduce((sum, _, i) => {
+          const mm = String(i + 1).padStart(2, "0");
+          const g = goals.find((g) => g.user?.id === u.id && g.month === `${year}-${mm}`);
+          return sum + (g ? g.target : 0);
+        }, 0);
+        const ytdAchieved = leads
+          .filter((l) => l.assignedUser?.id === u.id && l.stage === "Fechado" && new Date(l.updatedAt).getFullYear() === year)
+          .reduce((s, l) => s + l.value, 0);
+        const ytdPct = annualTarget ? Math.min(100, Math.round((ytdAchieved / annualTarget) * 100)) : 0;
+
+        return (
+          <div key={u.id} style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{u.name}</div>
+              <div style={{ fontSize: 12, color: C.inkSoft }}>
+                YTD: <strong style={{ color: C.sage }}>{fmtBRL(ytdAchieved)}</strong> de {fmtBRL(annualTarget)} ({ytdPct}%)
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 4 }}>
+              {MONTHS_PT.map((label, i) => {
+                const mm = String(i + 1).padStart(2, "0");
+                const key = `${u.id}-${mm}`;
+                const isCurrent = `${year}-${mm}` === currentMonth();
+                return (
+                  <div key={mm} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                    <div style={{ fontSize: 9.5, color: isCurrent ? C.gold : C.muted, textAlign: "center", fontWeight: isCurrent ? 700 : 400 }}>{label}</div>
+                    {isMaster ? (
+                      <input
+                        style={{ fontSize: 10, padding: "5px 3px", border: `1px solid ${isCurrent ? C.gold : C.border}`, borderRadius: 5, textAlign: "center", width: "100%" }}
+                        value={goalFor(u.id, mm)}
+                        onChange={(e) => setLocal({ ...local, [key]: e.target.value })}
+                        onBlur={(e) => saveGoal(u.id, mm, e.target.value)}
+                      />
+                    ) : (
+                      <div style={{ fontSize: 10, padding: "5px 3px", textAlign: "center", color: isCurrent ? C.gold : C.inkSoft, border: `1px solid transparent` }}>
+                        {goalFor(u.id, mm) ? fmtBRL(Number(goalFor(u.id, mm))).replace("R$", "") : "—"}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
