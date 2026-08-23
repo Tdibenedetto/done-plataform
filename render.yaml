@@ -10,7 +10,7 @@ services:
     runtime: node
     plan: free
     rootDir: server
-    buildCommand: npm install && npx prisma db push --accept-data-loss
+        buildCommand: npm install && npx prisma db push --force-reset --accept-data-loss
     startCommand: npm start
     envVars:
       - key: DATABASE_URL
