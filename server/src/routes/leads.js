@@ -23,7 +23,7 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, value, assignedUserId } = req.body;
+  const { name, value, assignedUserId, expectedCloseDate } = req.body;
   if (!name) return res.status(400).json({ error: "Nome do lead é obrigatório." });
 
   // Membro só cria lead para si mesmo; Master pode atribuir a qualquer um do time.
@@ -35,14 +35,20 @@ router.post("/", async (req, res) => {
   }
 
   const lead = await prisma.lead.create({
-    data: { organizationId: req.organizationId, assignedUserId: ownerId, name, value: Number(value) || 0 },
+    data: {
+      organizationId: req.organizationId,
+      assignedUserId: ownerId,
+      name,
+      value: Number(value) || 0,
+      expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null,
+    },
     include: { assignedUser: { select: { id: true, name: true } }, _count: { select: { notes: true } } },
   });
   res.json(lead);
 });
 
 router.patch("/:id", async (req, res) => {
-  const { stage, lostReason } = req.body;
+  const { stage, lostReason, expectedCloseDate } = req.body;
   if (stage && !STAGES.includes(stage)) return res.status(400).json({ error: "Etapa inválida." });
 
   const existing = await prisma.lead.findFirst({ where: leadWhere(req, req.params.id) });
@@ -51,6 +57,7 @@ router.patch("/:id", async (req, res) => {
   const data = {};
   if (stage) data.stage = stage;
   if (lostReason !== undefined) data.lostReason = lostReason;
+  if (expectedCloseDate !== undefined) data.expectedCloseDate = expectedCloseDate ? new Date(expectedCloseDate) : null;
 
   await prisma.lead.update({ where: { id: existing.id }, data });
 
