@@ -78,6 +78,7 @@ model Lead {
   value          Float        @default(0)
   stage          String       @default("Novo Lead")
   lostReason     String?
+  expectedCloseDate DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
