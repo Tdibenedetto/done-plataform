@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, UserPlus, X, Mail } from "lucide-react";
+import { Plus, Trash2, UserPlus, X, Mail, MessageSquare } from "lucide-react";
 import { C, S } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
 
@@ -19,6 +19,7 @@ export default function FerramentaVendas() {
   const [draft, setDraft] = useState({ name: "", value: "", assignedUserId: "" });
   const [lostFor, setLostFor] = useState(null); // lead sendo marcado como perdido
   const [lostReason, setLostReason] = useState("");
+  const [openLead, setOpenLead] = useState(null); // lead com o painel de notas aberto
 
   const reload = useCallback(async () => {
     const calls = [api.leadsList(), api.goalsList(), api.teamGet()];
@@ -121,12 +122,19 @@ export default function FerramentaVendas() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
               {leads.filter((l) => l.stage === stage).map((l) => (
-                <div key={l.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3 }}>{l.name}</div>
+                <div key={l.id} onClick={() => setOpenLead(l)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 6, cursor: "pointer" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3, display: "flex", justifyContent: "space-between", gap: 6 }}>
+                    <span>{l.name}</span>
+                    {l._count?.notes > 0 && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 2, color: C.muted, flexShrink: 0 }}>
+                        <MessageSquare size={11} />{l._count.notes}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, color: C.gold, fontWeight: 600 }}>{fmtBRL(l.value)}</div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: 10.5, color: C.muted }}>{l.assignedUser?.name || "—"}</span>
-                    <span style={{ display: "flex", gap: 4 }}>
+                    <span style={{ display: "flex", gap: 4 }} onClick={(e) => e.stopPropagation()}>
                       <button style={S.moveBtn} disabled={stage === activeStages[0]} onClick={() => moveLead(l, -1)}>◀</button>
                       <button style={S.moveBtn} disabled={stage === "Fechado"} onClick={() => moveLead(l, 1)}>▶</button>
                       {stage !== "Fechado" && (
@@ -169,6 +177,13 @@ export default function FerramentaVendas() {
         </div>
       )}
 
+      {openLead && (
+        <LeadDetailModal
+          lead={openLead}
+          onClose={() => { setOpenLead(null); reload(); }}
+        />
+      )}
+
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Metas do time (mês atual)</div>
         {team.users.map((u) => {
@@ -191,6 +206,76 @@ export default function FerramentaVendas() {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function LeadDetailModal({ lead, onClose }) {
+  const [notes, setNotes] = useState(null);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const reload = useCallback(async () => {
+    setNotes(await api.leadNotesList(lead.id));
+  }, [lead.id]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  async function addNote() {
+    if (!draft.trim()) return;
+    setBusy(true);
+    try {
+      await api.leadNoteAdd(lead.id, draft.trim());
+      setDraft("");
+      reload();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function fmtDate(iso) {
+    return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(28,33,48,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }} onClick={onClose}>
+      <div style={{ background: C.card, borderRadius: 14, padding: 24, width: 440, maxHeight: "80vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 16 }}>{lead.name}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+              {fmtBRL(lead.value)} · {lead.stage} · {lead.assignedUser?.name || "—"}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}><X size={18} /></button>
+        </div>
+
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 12.5, color: C.inkSoft, marginTop: 18, marginBottom: 8 }}>
+          Histórico e notas
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, paddingRight: 4 }}>
+          {notes === null && <div style={{ fontSize: 12, color: C.muted }}>Carregando...</div>}
+          {notes && notes.length === 0 && <div style={{ fontSize: 12, color: C.muted }}>Nenhuma nota ainda.</div>}
+          {notes && notes.map((n) => (
+            <div key={n.id} style={{ background: C.paper, borderRadius: 10, padding: 10 }}>
+              <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.45 }}>{n.content}</div>
+              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 6 }}>{n.author?.name || "—"} · {fmtDate(n.createdAt)}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+          <input
+            style={{ ...S.input, flex: 1 }}
+            placeholder="Registrar uma ligação, e-mail, próximo passo..."
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addNote()}
+          />
+          <button style={S.primaryBtnSm} disabled={busy} onClick={addNote}>Adicionar</button>
+        </div>
       </div>
     </div>
   );
@@ -258,4 +343,3 @@ function TeamPanel({ team, onChange }) {
     </div>
   );
 }
-
