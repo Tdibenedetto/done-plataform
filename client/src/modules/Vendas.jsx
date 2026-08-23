@@ -32,6 +32,16 @@ export default function FerramentaVendas() {
 
   useEffect(() => { reload(); }, [reload]);
 
+  const filteredLeads = useMemo(() => {
+    if (!leads) return [];
+    return leads.filter((l) => {
+      if (filters.assignedUserId && l.assignedUser?.id !== filters.assignedUserId) return false;
+      if (filters.minValue && l.value < Number(filters.minValue)) return false;
+      if (filters.maxValue && l.value > Number(filters.maxValue)) return false;
+      return true;
+    });
+  }, [leads, filters]);
+
   if (leads === null || team === null) return <div style={{ color: C.muted, fontSize: 13 }}>Carregando...</div>;
 
   async function addLead() {
@@ -70,14 +80,6 @@ export default function FerramentaVendas() {
   const overallTarget = monthGoals.reduce((s, g) => s + g.target, 0) || 1;
   const pct = Math.min(100, Math.round((totalClosed / overallTarget) * 100));
 
-  const filteredLeads = useMemo(() => {
-    return leads.filter((l) => {
-      if (filters.assignedUserId && l.assignedUser?.id !== filters.assignedUserId) return false;
-      if (filters.minValue && l.value < Number(filters.minValue)) return false;
-      if (filters.maxValue && l.value > Number(filters.maxValue)) return false;
-      return true;
-    });
-  }, [leads, filters]);
   const filtersActive = filters.assignedUserId || filters.minValue || filters.maxValue;
 
   function isOverdue(l) {
