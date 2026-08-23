@@ -35,6 +35,7 @@ model User {
 
   assignedLeads Lead[]
   goals         Goal[]
+  leadNotes     LeadNote[]
 
   @@index([organizationId])
 }
@@ -80,8 +81,22 @@ model Lead {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  notes LeadNote[]
+
   @@index([organizationId])
   @@index([assignedUserId])
+}
+
+model LeadNote {
+  id        String   @id @default(uuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
 }
 
 model Goal {
@@ -133,4 +148,3 @@ model Payment {
 
   @@index([organizationId])
 }
-
