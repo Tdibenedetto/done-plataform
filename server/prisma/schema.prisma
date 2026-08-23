@@ -19,6 +19,7 @@ model Organization {
   goals         Goal[]
   coachResults  CoachResult[]
   gestaoUploads GestaoUpload[]
+  revenueGoals  RevenueGoal[]
   subscriptions Subscription[]
   payments      Payment[]
 }
@@ -121,6 +122,17 @@ model GestaoUpload {
   rows           Json
   createdAt      DateTime     @default(now())
 
+  @@index([organizationId])
+}
+
+model RevenueGoal {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  month          String
+  target         Float        @default(0)
+
+  @@unique([organizationId, month])
   @@index([organizationId])
 }
 
