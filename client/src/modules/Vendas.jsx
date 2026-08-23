@@ -122,4 +122,279 @@ export default function FerramentaVendas() {
       </div>
 
       {showForm && (
-        <div style={{
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input style={{ ...S.input, flex: 1, minWidth: 160 }} placeholder="Nome do cliente" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+          <input style={{ ...S.input, width: 150 }} placeholder="Valor (R$)" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} />
+          <input style={{ ...S.input, width: 160 }} type="date" value={draft.expectedCloseDate} onChange={(e) => setDraft({ ...draft, expectedCloseDate: e.target.value })} />
+          {isMaster && (
+            <select style={{ ...S.input, width: 170 }} value={draft.assignedUserId} onChange={(e) => setDraft({ ...draft, assignedUserId: e.target.value })}>
+              <option value="">Atribuir a mim</option>
+              {team.users.filter((u) => u.id !== loadSession().user.id).map((u) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          )}
+          <button style={S.primaryBtnSm} onClick={addLead}>Adicionar</button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", background: C.paper, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px" }}>
+        <Filter size={13} color={C.muted} />
+        {isMaster && (
+          <select style={{ ...S.input, width: 160, padding: "6px 10px", fontSize: 12 }} value={filters.assignedUserId} onChange={(e) => setFilters({ ...filters, assignedUserId: e.target.value })}>
+            <option value="">Todos os vendedores</option>
+            {team.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        )}
+        <input style={{ ...S.input, width: 110, padding: "6px 10px", fontSize: 12 }} placeholder="Valor mín." value={filters.minValue} onChange={(e) => setFilters({ ...filters, minValue: e.target.value })} />
+        <input style={{ ...S.input, width: 110, padding: "6px 10px", fontSize: 12 }} placeholder="Valor máx." value={filters.maxValue} onChange={(e) => setFilters({ ...filters, maxValue: e.target.value })} />
+        {filtersActive && (
+          <button style={{ ...S.ghostBtn, padding: "6px 10px", fontSize: 11.5 }} onClick={() => setFilters({ assignedUserId: "", minValue: "", maxValue: "" })}>Limpar filtros</button>
+        )}
+        <span style={{ fontSize: 11.5, color: C.muted, marginLeft: "auto" }}>{filteredLeads.length} de {leads.length} leads</span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
+        {activeStages.map((stage) => (
+          <div key={stage} style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, fontWeight: 600, color: C.inkSoft, display: "flex", justifyContent: "space-between", borderBottom: `2px solid ${C.border}`, paddingBottom: 8 }}>
+              {stage}<span style={{ color: C.muted, fontWeight: 500 }}>{filteredLeads.filter((l) => l.stage === stage).length}</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
+              {filteredLeads.filter((l) => l.stage === stage).map((l) => (
+                <div key={l.id} onClick={() => setOpenLead(l)} style={{ background: C.card, border: `1px solid ${isOverdue(l) ? C.danger : C.border}`, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 6, cursor: "pointer" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3, display: "flex", justifyContent: "space-between", gap: 6 }}>
+                    <span>{l.name}</span>
+                    {l._count?.notes > 0 && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 2, color: C.muted, flexShrink: 0 }}>
+                        <MessageSquare size={11} />{l._count.notes}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, color: C.gold, fontWeight: 600 }}>{fmtBRL(l.value)}</div>
+                  {l.expectedCloseDate && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, color: isOverdue(l) ? C.danger : C.muted }}>
+                      <Calendar size={10} />{fmtShortDate(l.expectedCloseDate)}{isOverdue(l) ? " · atrasado" : ""}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 10.5, color: C.muted }}>{l.assignedUser?.name || "—"}</span>
+                    <span style={{ display: "flex", gap: 4 }} onClick={(e) => e.stopPropagation()}>
+                      <button style={S.moveBtn} disabled={stage === activeStages[0]} onClick={() => moveLead(l, -1)}>◀</button>
+                      <button style={S.moveBtn} disabled={stage === "Fechado"} onClick={() => moveLead(l, 1)}>▶</button>
+                      {stage !== "Fechado" && (
+                        <button style={{ ...S.moveBtn, color: C.danger }} title="Marcar como perdido" onClick={() => setLostFor(l)}>✕</button>
+                      )}
+                      <button style={{ ...S.moveBtn, color: C.danger }} onClick={() => removeLead(l.id)}><Trash2 size={10} /></button>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {leads.some((l) => l.stage === "Perdido") && (
+        <div style={{ background: C.dangerSoft, borderRadius: 12, padding: 16 }}>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 13, color: C.danger, marginBottom: 10 }}>Perdidos</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {leads.filter((l) => l.stage === "Perdido").map((l) => (
+              <div key={l.id} style={{ fontSize: 12, color: C.inkSoft, display: "flex", justifyContent: "space-between" }}>
+                <span><strong>{l.name}</strong> · {fmtBRL(l.value)} {l.lostReason ? `— ${l.lostReason}` : ""}</span>
+                <button style={{ ...S.moveBtn, color: C.danger }} onClick={() => removeLead(l.id)}><Trash2 size={10} /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {lostFor && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(28,33,48,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
+          <div style={{ background: C.card, borderRadius: 14, padding: 24, width: 360 }}>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Marcar "{lostFor.name}" como perdido</div>
+            <input style={S.input} placeholder="Motivo (opcional)" value={lostReason} onChange={(e) => setLostReason(e.target.value)} />
+            <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
+              <button style={S.ghostBtn} onClick={() => { setLostFor(null); setLostReason(""); }}>Cancelar</button>
+              <button style={{ ...S.primaryBtnSm, background: C.danger }} onClick={() => markLost(lostFor)}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {openLead && (
+        <LeadDetailModal
+          lead={openLead}
+          onClose={() => { setOpenLead(null); reload(); }}
+        />
+      )}
+
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Metas do time (mês atual)</div>
+        {team.users.map((u) => {
+          const closed = leads.filter((l) => l.assignedUser?.id === u.id && l.stage === "Fechado").reduce((s, l) => s + l.value, 0);
+          const goal = monthGoals.find((g) => g.user?.id === u.id);
+          const target = goal ? goal.target : 0;
+          const p = target ? Math.min(100, Math.round((closed / target) * 100)) : 0;
+          return (
+            <div key={u.id} style={{ display: "grid", gridTemplateColumns: "140px 1fr 140px", alignItems: "center", gap: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>{u.name} {u.role === "master" && <span style={{ color: C.muted, fontSize: 10.5 }}>(master)</span>}</div>
+              <div style={{ height: 8, background: C.border, borderRadius: 999, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${p}%`, background: C.sage, borderRadius: 999 }} />
+              </div>
+              {isMaster ? (
+                <input style={{ ...S.input, padding: "6px 10px", fontSize: 12 }} placeholder="Meta R$"
+                  defaultValue={target || ""} onBlur={(e) => setGoal(u.id, e.target.value)} />
+              ) : (
+                <div style={{ fontSize: 12, color: C.muted }}>{fmtBRL(target)}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LeadDetailModal({ lead, onClose }) {
+  const [notes, setNotes] = useState(null);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [closeDate, setCloseDate] = useState(lead.expectedCloseDate ? lead.expectedCloseDate.slice(0, 10) : "");
+
+  const reload = useCallback(async () => {
+    setNotes(await api.leadNotesList(lead.id));
+  }, [lead.id]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  async function addNote() {
+    if (!draft.trim()) return;
+    setBusy(true);
+    try {
+      await api.leadNoteAdd(lead.id, draft.trim());
+      setDraft("");
+      reload();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveCloseDate() {
+    await api.leadUpdate(lead.id, { expectedCloseDate: closeDate || null });
+  }
+
+  function fmtDate(iso) {
+    return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(28,33,48,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }} onClick={onClose}>
+      <div style={{ background: C.card, borderRadius: 14, padding: 24, width: 440, maxHeight: "80vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 16 }}>{lead.name}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+              {fmtBRL(lead.value)} · {lead.stage} · {lead.assignedUser?.name || "—"}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}><X size={18} /></button>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
+          <span style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Fechamento previsto</span>
+          <input type="date" style={{ ...S.input, padding: "6px 10px", fontSize: 12 }} value={closeDate} onChange={(e) => setCloseDate(e.target.value)} onBlur={saveCloseDate} />
+        </div>
+
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 12.5, color: C.inkSoft, marginTop: 18, marginBottom: 8 }}>
+          Histórico e notas
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, paddingRight: 4 }}>
+          {notes === null && <div style={{ fontSize: 12, color: C.muted }}>Carregando...</div>}
+          {notes && notes.length === 0 && <div style={{ fontSize: 12, color: C.muted }}>Nenhuma nota ainda.</div>}
+          {notes && notes.map((n) => (
+            <div key={n.id} style={{ background: C.paper, borderRadius: 10, padding: 10 }}>
+              <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.45 }}>{n.content}</div>
+              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 6 }}>{n.author?.name || "—"} · {fmtDate(n.createdAt)}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+          <input
+            style={{ ...S.input, flex: 1 }}
+            placeholder="Registrar uma ligação, e-mail, próximo passo..."
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addNote()}
+          />
+          <button style={S.primaryBtnSm} disabled={busy} onClick={addNote}>Adicionar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeamPanel({ team, onChange }) {
+  const [email, setEmail] = useState("");
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  async function invite() {
+    if (!email.trim()) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api.teamInvite(email.trim());
+      setMsg(r.emailSent ? "Convite enviado por e-mail." : `E-mail não configurado — copie o link: ${r.inviteLink}`);
+      setEmail("");
+      onChange();
+    } catch (e) {
+      setMsg(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function revoke(id) { await api.teamRevokeInvite(id); onChange(); }
+  async function remove(id) { await api.teamRemoveMember(id); onChange(); }
+
+  const slotsUsed = team.users.length + team.invites.length;
+  const slotsLeft = team.maxTeamSize - slotsUsed;
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Equipe</div>
+        <div style={{ fontSize: 11.5, color: C.muted }}>{slotsUsed}/{team.maxTeamSize} vagas usadas</div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {team.users.map((u) => (
+          <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
+            <span>{u.name} <span style={{ color: C.muted }}>· {u.email} · {u.role === "master" ? "Master" : "Vendedor"}</span></span>
+            {u.role !== "master" && (
+              <button style={{ ...S.moveBtn, color: C.danger }} onClick={() => remove(u.id)}><Trash2 size={10} /></button>
+            )}
+          </div>
+        ))}
+        {team.invites.map((inv) => (
+          <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, color: C.muted }}>
+            <span><Mail size={11} style={{ verticalAlign: -1, marginRight: 4 }} />{inv.email} · convite pendente</span>
+            <button style={S.moveBtn} onClick={() => revoke(inv.id)}><X size={10} /></button>
+          </div>
+        ))}
+      </div>
+
+      {slotsLeft > 0 ? (
+        <div style={{ display: "flex", gap: 8 }}>
+          <input style={{ ...S.input, flex: 1 }} placeholder="E-mail do vendedor" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <button style={S.primaryBtnSm} disabled={busy} onClick={invite}>{busy ? "Enviando..." : "Convidar"}</button>
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: C.muted }}>Vagas do plano esgotadas.</div>
+      )}
+      {msg && <div style={{ fontSize: 11.5, color: C.inkSoft, wordBreak: "break-all" }}>{msg}</div>}
+    </div>
+  );
+}
