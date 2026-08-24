@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Activity, Trello, BarChart2, LayoutGrid, Eye, EyeOff,
-  ShieldCheck, Menu, X,
+  ShieldCheck, Menu, X, ChevronRight,
 } from "lucide-react";
 import { C, S, FONT_DISPLAY, FONT_IMPORT, RESPONSIVE_CSS } from "./theme.js";
 import { api, saveSession, loadSession, clearSession } from "./lib/api.js";
@@ -240,87 +240,136 @@ function InviteAcceptScreen({ token, onAuth }) {
   );
 }
 
+const MODULE_HINT = { processo: "vendas", time: "vendas", preco: "gestao", pipeline: "gestao" };
+
+function MiniRadar({ coachResult }) {
+  const axes = [
+    { label: "Nota", value: coachResult.final, angle: -90 },
+    { label: "Processo", value: coachResult.dimProcesso, angle: -18 },
+    { label: "Preço", value: coachResult.dimPreco, angle: 54 },
+    { label: "Time", value: coachResult.dimTime, angle: 126 },
+    { label: "Pipeline", value: coachResult.dimPipeline, angle: 198 },
+  ];
+  const cx = 90, cy = 78, R = 52;
+  const pt = (angleDeg, r) => {
+    const a = (angleDeg * Math.PI) / 180;
+    return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+  };
+  const outer = axes.map((ax) => pt(ax.angle, R).join(",")).join(" ");
+  const mid = axes.map((ax) => pt(ax.angle, R * 0.55).join(",")).join(" ");
+  const data = axes.map((ax) => pt(ax.angle, (Math.max(5, ax.value) / 100) * R).join(",")).join(" ");
+
+  return (
+    <svg viewBox="0 0 180 156" width="100%" height="150">
+      <polygon points={outer} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+      <polygon points={mid} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+      <polygon points={data} fill={C.gold} fillOpacity="0.28" stroke={C.gold} strokeWidth="1.8" strokeLinejoin="round" />
+      {axes.map((ax, i) => {
+        const [dx, dy] = pt(ax.angle, (Math.max(5, ax.value) / 100) * R);
+        const [lx, ly] = pt(ax.angle, R + 20);
+        const anchor = Math.cos((ax.angle * Math.PI) / 180) > 0.3 ? "start" : Math.cos((ax.angle * Math.PI) / 180) < -0.3 ? "end" : "middle";
+        return (
+          <g key={i}>
+            <circle cx={dx} cy={dy} r="2.8" fill={C.gold} />
+            <text x={lx} y={ly - 3} fontSize="8" fill="#C7CAD4" fontFamily="Inter" textAnchor={anchor}>{ax.label}</text>
+            <text x={lx} y={ly + 7} fontSize="9.5" fontWeight="700" fill="#fff" fontFamily="Inter" textAnchor={anchor}>{Math.round(ax.value)}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen, onCloseMobile }) {
   const isMaster = profile.role === "master";
   const items = [
-    { key: "overview", label: "Visão Geral", icon: LayoutGrid },
+    { key: "overview", label: "Vis\u00e3o Geral", icon: LayoutGrid },
     { key: "coach", label: "Comercial Coach", icon: Activity },
     { key: "vendas", label: "Ferramenta de Vendas", icon: Trello },
-    ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gestão", icon: BarChart2 }] : []),
+    ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gest\u00e3o", icon: BarChart2 }] : []),
   ];
 
   const dims = coachResult ? [
     { key: "processo", label: "Processo", v: coachResult.dimProcesso },
-    { key: "preco", label: "Preço", v: coachResult.dimPreco },
+    { key: "preco", label: "Pre\u00e7o", v: coachResult.dimPreco },
     { key: "time", label: "Time", v: coachResult.dimTime },
     { key: "pipeline", label: "Pipeline", v: coachResult.dimPipeline },
   ] : [];
   const weakest = dims.length ? [...dims].sort((a, b) => a.v - b.v)[0] : null;
 
   return (
-    <>
-      <aside className={`done-sidebar ${mobileOpen ? "open" : ""}`} style={S.sidebar}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={S.wordmark}>D.O.N.E</div>
-            <div style={{ fontSize: 9.5, letterSpacing: "0.1em", color: C.muted, padding: "0 10px" }}>COMMERCIAL OPERATING SYSTEM</div>
-          </div>
-          <button onClick={onCloseMobile} style={{ display: mobileOpen ? "flex" : "none", background: "none", border: "none", color: "#C7CAD4", cursor: "pointer" }}><X size={18} /></button>
+    <aside className={`done-sidebar ${mobileOpen ? "open" : ""}`} style={S.sidebar}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={S.wordmark}>D.O.N.E</div>
+          <div style={{ fontSize: 9.5, letterSpacing: "0.1em", color: "#6E7484", padding: "0 10px" }}>COMMERCIAL OPERATING SYSTEM</div>
         </div>
+        <button onClick={onCloseMobile} style={{ display: mobileOpen ? "flex" : "none", background: "none", border: "none", color: "#C7CAD4", cursor: "pointer" }}><X size={18} /></button>
+      </div>
 
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: C.gold, padding: "20px 10px 8px" }}>NAVEGAÇÃO</div>
-        <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {items.map((it) => {
-            const Icon = it.icon;
-            const isActive = active === it.key;
-            return (
-              <button key={it.key} onClick={() => setActive(it.key)}
-                style={{ ...S.navItem, background: isActive ? C.gold : "transparent", color: isActive ? "#fff" : "#C7CAD4", position: "relative" }}>
-                {isActive && <span style={{ position: "absolute", left: -16, top: 8, bottom: 8, width: 3, borderRadius: 3, background: C.gold }} />}
-                <span style={{ width: 26, height: 26, borderRadius: "50%", background: isActive ? C.ink : "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <Icon size={13} color={isActive ? C.gold : "#C7CAD4"} />
-                </span>
-                <span style={S.navLabel}>{it.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: C.gold, padding: "20px 10px 8px" }}>NAVEGA\u00c7\u00c3O</div>
+      <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {items.map((it) => {
+          const Icon = it.icon;
+          const isActive = active === it.key;
+          return (
+            <button key={it.key} onClick={() => setActive(it.key)}
+              style={{ ...S.navItem, background: isActive ? "rgba(255,255,255,0.06)" : "transparent", color: isActive ? "#fff" : "#9099AB", position: "relative", fontWeight: isActive ? 600 : 500 }}>
+              {isActive && <span style={{ position: "absolute", left: -16, top: 6, bottom: 6, width: 3, borderRadius: 3, background: C.gold }} />}
+              <span style={{ width: 26, height: 26, borderRadius: "50%", background: isActive ? C.gold : "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Icon size={13} color={isActive ? C.ink : "#9099AB"} />
+              </span>
+              <span style={S.navLabel}>{it.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
-        {coachResult && (
-          <div style={{ marginTop: 24, background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: 14 }}>
+      {coachResult && (
+        <>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: C.gold, padding: "22px 10px 10px" }}>INTELIG\u00caNCIA</div>
+          <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: 14 }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: C.gold }}>NOTA COMERCIAL</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 6 }}>
               <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26, color: "#fff" }}>{coachResult.final}</span>
-              <span style={{ fontSize: 11, color: C.muted }}>/100</span>
+              <span style={{ fontSize: 11, color: "#6E7484" }}>/100</span>
             </div>
-            {weakest && (
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.08)" }}>
-                <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", color: C.muted }}>FOCO DA SEMANA</div>
-                <div style={{ fontSize: 12.5, color: "#fff", fontWeight: 600, marginTop: 4 }}>{weakest.label}</div>
-                <div style={{ fontSize: 11, color: C.muted }}>nota {Math.round(weakest.v)} — sua prioridade agora</div>
-              </div>
-            )}
+            <MiniRadar coachResult={coachResult} />
           </div>
-        )}
 
-        <div style={{ fontFamily: FONT_DISPLAY, fontStyle: "italic", fontSize: 12.5, color: "#8A8F9C", lineHeight: 1.5, marginTop: 24, padding: "0 10px" }}>
-          "Clareza para decidir.<br />Disciplina para executar."
+          {weakest && (
+            <button onClick={() => setActive(MODULE_HINT[weakest.key])} style={{ marginTop: 10, background: "rgba(255,255,255,0.04)", border: "none", borderRadius: 12, padding: 14, display: "flex", alignItems: "center", gap: 10, cursor: "pointer", textAlign: "left", width: "100%" }}>
+              <span style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Activity size={14} color={C.gold} />
+              </span>
+              <span style={{ flex: 1 }}>
+                <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", color: "#6E7484" }}>FOCO DA SEMANA</div>
+                <div style={{ fontSize: 12.5, color: "#fff", fontWeight: 600, marginTop: 2 }}>{weakest.label}</div>
+                <div style={{ fontSize: 10.5, color: "#6E7484" }}>nota {Math.round(weakest.v)} \u2014 sua prioridade agora</div>
+              </span>
+              <ChevronRight size={14} color="#6E7484" />
+            </button>
+          )}
+        </>
+      )}
+
+      <div style={{ fontFamily: FONT_DISPLAY, fontStyle: "italic", fontSize: 12.5, color: "#8A8F9C", lineHeight: 1.5, marginTop: 24, padding: "0 10px" }}>
+        "Clareza para decidir.<br />Disciplina para executar."
+      </div>
+
+      <div style={{ flex: 1 }} />
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, borderTop: `1px solid rgba(255,255,255,.08)`, paddingTop: 16, marginTop: 16 }}>
+        <div style={{ width: 30, height: 30, borderRadius: "50%", background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 12, color: "#fff", flexShrink: 0 }}>
+          {profile.name?.[0]?.toUpperCase() || "?"}
         </div>
-
-        <div style={{ flex: 1 }} />
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10, borderTop: `1px solid rgba(255,255,255,.08)`, paddingTop: 16, marginTop: 16 }}>
-          <div style={{ width: 30, height: 30, borderRadius: "50%", background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 12, color: "#fff", flexShrink: 0 }}>
-            {profile.name?.[0]?.toUpperCase() || "?"}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile.name}</div>
-            <div style={{ fontSize: 10.5, color: C.muted }}>{profile.role === "master" ? "Master" : "Vendedor"}</div>
-          </div>
-          <button onClick={onLogout} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 11 }}>Sair</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile.name}</div>
+          <div style={{ fontSize: 10.5, color: "#6E7484" }}>{profile.role === "master" ? "Administrador" : "Vendedor"}</div>
         </div>
-      </aside>
-    </>
+        <button onClick={onLogout} style={{ background: "none", border: "none", color: "#6E7484", cursor: "pointer", fontSize: 11 }}>Sair</button>
+      </div>
+    </aside>
   );
 }
 
