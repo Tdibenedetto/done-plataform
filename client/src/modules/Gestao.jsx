@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { Upload, X, List, Target, Lightbulb, Link2 } from "lucide-react";
-import { C, S } from "../theme.js";
+import { C, S, FONT_DISPLAY } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
 
 const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -80,12 +80,12 @@ export default function FerramentaGestao() {
     return (
       <div style={S.moduleCol}>
         <div>
-          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Gestão</h2>
+          <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Gestão</h2>
           <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>Suba sua planilha e veja vendas, margem e estoque num único painel.</p>
         </div>
         <div style={{ border: `1.5px dashed ${C.border}`, borderRadius: 14, padding: 40, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
           <Upload size={28} color={C.gold} />
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15 }}>Envie um arquivo CSV</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15 }}>Envie um arquivo CSV</div>
           <div style={{ fontSize: 12.5, color: C.muted, maxWidth: 400 }}>
             Pode ser sua planilha do jeito que já usa — a IA identifica as colunas automaticamente. Se preferir o formato exato, use: mes, categoria, produto, sku, valor, margem, estoque.
           </div>
@@ -215,7 +215,7 @@ export default function FerramentaGestao() {
     <div style={S.moduleCol}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Gestão</h2>
+          <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Gestão</h2>
           <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>
             {data.uploads.length} {data.uploads.length === 1 ? "planilha enviada" : "planilhas enviadas"} · última em {new Date(data.uploads[data.uploads.length - 1].createdAt).toLocaleDateString("pt-BR")}
           </p>
@@ -238,7 +238,7 @@ export default function FerramentaGestao() {
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", alignItems: "center", gap: 16 }}>
         <div>
           <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}><Target size={11} /> Meta do mês ({thisMonthLabel})</div>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 19 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19 }}>
             {fmtBRL(thisMonthRevenue)} <span style={{ fontWeight: 400, fontSize: 13, color: C.muted }}>de {fmtBRL(monthTarget)}</span>
           </div>
         </div>
@@ -249,7 +249,7 @@ export default function FerramentaGestao() {
           <input style={{ ...S.input, width: 120, padding: "6px 10px", fontSize: 12 }} placeholder="Meta R$"
             defaultValue={monthTarget || ""} onBlur={(e) => saveMonthGoal(e.target.value)} />
         ) : (
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 15, color: C.sage }}>{monthPct}%</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15, color: C.sage }}>{monthPct}%</div>
         )}
       </div>
 
@@ -260,7 +260,7 @@ export default function FerramentaGestao() {
       </div>
 
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Faturamento por mês (todas as planilhas combinadas)</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Faturamento por mês (todas as planilhas combinadas)</div>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={monthData}>
             <CartesianGrid stroke={C.border} vertical={false} />
@@ -274,7 +274,7 @@ export default function FerramentaGestao() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Margem média por categoria</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Margem média por categoria</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {catData.map((m) => (
               <div key={m.categoria} style={{ display: "grid", gridTemplateColumns: "130px 1fr 34px", alignItems: "center", gap: 10 }}>
@@ -282,13 +282,13 @@ export default function FerramentaGestao() {
                 <div style={{ height: 7, background: C.border, borderRadius: 999, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${Math.min(100, m.margem * 2)}%`, background: C.sage, borderRadius: 999 }} />
                 </div>
-                <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, fontWeight: 600, textAlign: "right" }}>{m.margem}%</div>
+                <div style={{ fontFamily: FONT_DISPLAY, fontSize: 12, fontWeight: 600, textAlign: "right" }}>{m.margem}%</div>
               </div>
             ))}
           </div>
         </div>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Alertas de estoque</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Alertas de estoque</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {alerts.length === 0 && <div style={{ fontSize: 12.5, color: C.muted }}>Nenhum alerta na planilha atual.</div>}
             {alerts.map((a) => (
@@ -308,7 +308,7 @@ export default function FerramentaGestao() {
 
       {insights.length > 0 && (
         <div style={{ background: C.ink, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.gold, fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.gold, fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5 }}>
             <Lightbulb size={16} /> Sugestões para essa operação
           </div>
           {insights.map((ins, i) => (
@@ -322,7 +322,7 @@ export default function FerramentaGestao() {
 
       {sellerCross.length > 0 && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5, marginBottom: 4 }}>
             <Link2 size={15} color={C.gold} /> Vendas x Margem por vendedor
           </div>
           <p style={{ fontSize: 11.5, color: C.muted, margin: "0 0 14px" }}>
@@ -337,7 +337,7 @@ export default function FerramentaGestao() {
                     <div style={{ fontSize: 12.5, fontWeight: 600 }}>{s.seller}</div>
                     <div style={{ fontSize: 11, color: C.muted }}>{fmtBRL(s.total)} fechados em categorias com margem cruzada</div>
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: belowAvg ? C.danger : C.sage, fontFamily: "'Space Grotesk',sans-serif" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: belowAvg ? C.danger : C.sage, fontFamily: FONT_DISPLAY }}>
                     {s.avgMargin === null ? "—" : `${s.avgMargin}% margem méd.`}
                     {belowAvg && <div style={{ fontSize: 10, fontWeight: 400, color: C.muted }}>abaixo da média geral</div>}
                   </div>
@@ -350,7 +350,7 @@ export default function FerramentaGestao() {
 
       {showSkus && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Todos os SKUs (histórico combinado)</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Todos os SKUs (histórico combinado)</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 100px 80px 90px", gap: 8, fontSize: 10.5, color: C.muted, fontWeight: 600, padding: "0 8px 8px", borderBottom: `1px solid ${C.border}` }}>
               <span>SKU</span><span>Produto</span><span>Categoria</span><span>Faturamento</span><span>Margem</span><span>Estoque</span>
@@ -360,7 +360,7 @@ export default function FerramentaGestao() {
                 <span style={{ color: C.muted }}>{s.sku}</span>
                 <span>{s.produto}</span>
                 <span style={{ color: C.inkSoft }}>{s.categoria}</span>
-                <span style={{ fontFamily: "'Space Grotesk',sans-serif", color: C.gold, fontWeight: 600 }}>{fmtBRL(s.valor)}</span>
+                <span style={{ fontFamily: FONT_DISPLAY, color: C.gold, fontWeight: 600 }}>{fmtBRL(s.valor)}</span>
                 <span>{s.margemMedia}%</span>
                 <span style={{ color: s.estoque === "ruptura" ? C.danger : s.estoque === "excesso" ? C.gold : C.sage }}>{s.estoque || "ok"}</span>
               </div>
@@ -376,7 +376,7 @@ function StatCard({ label, value, tone }) {
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 4 }}>
       <div style={{ fontSize: 11.5, color: C.muted }}>{label}</div>
-      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 19, color: tone || C.ink }}>{value}</div>
+      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19, color: tone || C.ink }}>{value}</div>
     </div>
   );
 }

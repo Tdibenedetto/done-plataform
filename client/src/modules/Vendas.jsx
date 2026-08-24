@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Plus, Trash2, UserPlus, X, Mail, MessageSquare, Calendar, Filter, TrendingUp, DollarSign, Briefcase } from "lucide-react";
-import { C, S } from "../theme.js";
+import { C, S, FONT_DISPLAY } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
 
 const STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação", "Fechado", "Carteira", "Faturado Total", "Perdido"];
@@ -133,7 +133,7 @@ export default function FerramentaVendas() {
     <div style={S.moduleCol}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Vendas</h2>
+          <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Vendas</h2>
           <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>
             {isMaster ? "Pipeline do time — leads, faturamento e equipe." : "Seu pipeline e seu faturamento."}
           </p>
@@ -156,18 +156,18 @@ export default function FerramentaVendas() {
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", alignItems: "center", gap: 16 }}>
         <div>
           <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}><DollarSign size={11} /> Faturado no mês</div>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 19 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19 }}>
             {fmtBRL(monthRealized)} <span style={{ fontWeight: 400, fontSize: 13, color: C.muted }}>de {fmtBRL(overallTarget)}</span>
           </div>
         </div>
         <div style={{ flex: 1, height: 8, background: C.border, borderRadius: 999, overflow: "hidden" }}>
           <div style={{ height: "100%", width: `${pct}%`, background: C.sage, borderRadius: 999 }} />
         </div>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 15, color: C.sage }}>{pct}%</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15, color: C.sage }}>{pct}%</div>
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Pipeline</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5 }}>Pipeline</div>
         <button style={S.primaryBtnSm} onClick={() => setShowForm((s) => !s)}><Plus size={14} /> Novo lead</button>
       </div>
 
@@ -209,7 +209,7 @@ export default function FerramentaVendas() {
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${activeStages.length}, minmax(160px, 1fr))`, gap: 12, minWidth: activeStages.length * 170 }}>
           {activeStages.map((stage) => (
             <div key={stage} style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
-              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 11.5, fontWeight: 600, color: C.inkSoft, display: "flex", justifyContent: "space-between", borderBottom: `2px solid ${C.border}`, paddingBottom: 8 }}>
+              <div style={{ fontFamily: FONT_DISPLAY, fontSize: 11.5, fontWeight: 600, color: C.inkSoft, display: "flex", justifyContent: "space-between", borderBottom: `2px solid ${C.border}`, paddingBottom: 8 }}>
                 {stage}<span style={{ color: C.muted, fontWeight: 500 }}>{filteredLeads.filter((l) => l.stage === stage).length}</span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
@@ -227,11 +227,11 @@ export default function FerramentaVendas() {
                     {stage === "Carteira" ? (
                       <>
                         <div style={{ fontSize: 10.5, color: C.muted }}>Total: {fmtBRL(l.value)}</div>
-                        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, color: C.sage, fontWeight: 600 }}>Faturado: {fmtBRL(totalInvoiced(l))}</div>
-                        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, color: C.gold, fontWeight: 700 }}>Saldo: {fmtBRL(saldoRestante(l))}</div>
+                        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 12.5, color: C.sage, fontWeight: 600 }}>Faturado: {fmtBRL(totalInvoiced(l))}</div>
+                        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 12.5, color: C.gold, fontWeight: 700 }}>Saldo: {fmtBRL(saldoRestante(l))}</div>
                       </>
                     ) : (
-                      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, color: C.gold, fontWeight: 600 }}>{fmtBRL(l.value)}</div>
+                      <div style={{ fontFamily: FONT_DISPLAY, fontSize: 12.5, color: C.gold, fontWeight: 600 }}>{fmtBRL(l.value)}</div>
                     )}
 
                     {l.categoria && (
@@ -272,7 +272,7 @@ export default function FerramentaVendas() {
 
       {leads.some((l) => l.stage === "Perdido") && (
         <div style={{ background: C.dangerSoft, borderRadius: 12, padding: 16 }}>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 13, color: C.danger, marginBottom: 10 }}>Perdidos</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 13, color: C.danger, marginBottom: 10 }}>Perdidos</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {leads.filter((l) => l.stage === "Perdido").map((l) => (
               <div key={l.id} style={{ fontSize: 12, color: C.inkSoft, display: "flex", justifyContent: "space-between" }}>
@@ -287,7 +287,7 @@ export default function FerramentaVendas() {
       {lostFor && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(28,33,48,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
           <div style={{ background: C.card, borderRadius: 14, padding: 24, width: 360 }}>
-            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Marcar "{lostFor.name}" como perdido</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, marginBottom: 10 }}>Marcar "{lostFor.name}" como perdido</div>
             <input style={S.input} placeholder="Motivo (opcional)" value={lostReason} onChange={(e) => setLostReason(e.target.value)} />
             <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
               <button style={S.ghostBtn} onClick={() => { setLostFor(null); setLostReason(""); }}>Cancelar</button>
@@ -300,7 +300,7 @@ export default function FerramentaVendas() {
       {invoiceFor && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(28,33,48,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
           <div style={{ background: C.card, borderRadius: 14, padding: 24, width: 380 }}>
-            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Registrar faturamento — "{invoiceFor.name}"</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Registrar faturamento — "{invoiceFor.name}"</div>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
               Total do pedido: {fmtBRL(invoiceFor.value)} · Já faturado: {fmtBRL(totalInvoiced(invoiceFor))} · Saldo: {fmtBRL(saldoRestante(invoiceFor))}
             </div>
@@ -321,7 +321,7 @@ export default function FerramentaVendas() {
       )}
 
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Faturado no mês, por vendedor</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5 }}>Faturado no mês, por vendedor</div>
         {team.users.map((u) => {
           const realized = leads
             .filter((l) => l.assignedUser?.id === u.id)
@@ -396,7 +396,7 @@ function LeadDetailModal({ lead, onClose }) {
       <div style={{ background: C.card, borderRadius: 14, padding: 24, width: 460, maxHeight: "85vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 16 }}>{lead.name}</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16 }}>{lead.name}</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
               {fmtBRL(lead.value)} · {lead.stage} · {lead.assignedUser?.name || "—"}
             </div>
@@ -425,7 +425,7 @@ function LeadDetailModal({ lead, onClose }) {
 
         {lead.invoiceEvents && lead.invoiceEvents.length > 0 && (
           <div style={{ marginTop: 14 }}>
-            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 12, color: C.inkSoft, marginBottom: 6 }}>Lançamentos de faturamento</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 12, color: C.inkSoft, marginBottom: 6 }}>Lançamentos de faturamento</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {lead.invoiceEvents.map((e) => (
                 <div key={e.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: C.inkSoft }}>
@@ -437,7 +437,7 @@ function LeadDetailModal({ lead, onClose }) {
           </div>
         )}
 
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 12.5, color: C.inkSoft, marginTop: 18, marginBottom: 8 }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 12.5, color: C.inkSoft, marginTop: 18, marginBottom: 8 }}>
           Histórico e notas
         </div>
 
@@ -491,26 +491,26 @@ function MetricsPanel({ leads }) {
 
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Métricas de conversão</div>
+      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5 }}>Métricas de conversão</div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
         <div style={{ background: C.paper, borderRadius: 10, padding: 14 }}>
           <div style={{ fontSize: 11, color: C.muted }}>Taxa de conversão</div>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22, color: C.sage }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, color: C.sage }}>
             {metrics.winRate === null ? "—" : `${metrics.winRate}%`}
           </div>
           <div style={{ fontSize: 10.5, color: C.muted }}>{metrics.decided} negócios decididos</div>
         </div>
         <div style={{ background: C.paper, borderRadius: 10, padding: 14 }}>
           <div style={{ fontSize: 11, color: C.muted }}>Ticket médio</div>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22, color: C.gold }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, color: C.gold }}>
             {fmtBRL(metrics.avgTicket)}
           </div>
           <div style={{ fontSize: 10.5, color: C.muted }}>por negócio fechado</div>
         </div>
         <div style={{ background: C.paper, borderRadius: 10, padding: 14 }}>
           <div style={{ fontSize: 11, color: C.muted }}>Ciclo médio de venda</div>
-          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 22, color: C.ink }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, color: C.ink }}>
             {metrics.avgCycle === null ? "—" : `${metrics.avgCycle} dias`}
           </div>
           <div style={{ fontSize: 10.5, color: C.muted }}>do cadastro ao fechamento</div>
@@ -555,7 +555,7 @@ function AnnualGoalsPanel({ team, goals, leads, isMaster, onChange }) {
 
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Meta anual {year} {!isMaster && <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(somente leitura)</span>}</div>
+      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5 }}>Meta anual {year} {!isMaster && <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>(somente leitura)</span>}</div>
 
       {team.users.map((u) => {
         const annualTarget = MONTHS_PT.reduce((sum, _, i) => {
@@ -623,7 +623,7 @@ function CarteiraPanel({ team, leads, isMaster }) {
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Carteira acumulada</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5 }}>Carteira acumulada</div>
         {isMaster && (
           <select style={{ ...S.input, width: 180, padding: "6px 10px", fontSize: 12 }} value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)}>
             <option value="">Toda a equipe</option>
@@ -634,7 +634,7 @@ function CarteiraPanel({ team, leads, isMaster }) {
 
       <div>
         <div style={{ fontSize: 12, color: C.muted }}>Saldo total em carteira{vendorFilter ? " (filtrado)" : ""}</div>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 28, color: C.gold }}>{fmtBRL(totalSaldo)}</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 28, color: C.gold }}>{fmtBRL(totalSaldo)}</div>
       </div>
 
       {isMaster && !vendorFilter && Object.keys(byVendor).length > 0 && (
@@ -694,7 +694,7 @@ function TeamPanel({ team, onChange }) {
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Equipe</div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5 }}>Equipe</div>
         <div style={{ fontSize: 11.5, color: C.muted }}>{slotsUsed}/{team.maxTeamSize} vagas usadas</div>
       </div>
 
