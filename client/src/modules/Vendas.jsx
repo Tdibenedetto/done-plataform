@@ -20,7 +20,7 @@ export default function FerramentaVendas() {
   const [showTeam, setShowTeam] = useState(false);
   const [showMetrics, setShowMetrics] = useState(false);
   const [showAnnual, setShowAnnual] = useState(false);
-  const [draft, setDraft] = useState({ name: "", value: "", assignedUserId: "", expectedCloseDate: "" });
+  const [draft, setDraft] = useState({ name: "", value: "", assignedUserId: "", expectedCloseDate: "", categoria: "" });
   const [lostFor, setLostFor] = useState(null); // lead sendo marcado como perdido
   const [lostReason, setLostReason] = useState("");
   const [openLead, setOpenLead] = useState(null); // lead com o painel de notas aberto
@@ -55,8 +55,9 @@ export default function FerramentaVendas() {
       value: Number(draft.value) || 0,
       assignedUserId: draft.assignedUserId || undefined,
       expectedCloseDate: draft.expectedCloseDate || undefined,
+      categoria: draft.categoria || undefined,
     });
-    setDraft({ name: "", value: "", assignedUserId: "", expectedCloseDate: "" });
+    setDraft({ name: "", value: "", assignedUserId: "", expectedCloseDate: "", categoria: "" });
     setShowForm(false);
     reload();
   }
@@ -138,6 +139,7 @@ export default function FerramentaVendas() {
           <input style={{ ...S.input, flex: 1, minWidth: 160 }} placeholder="Nome do cliente" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           <input style={{ ...S.input, width: 150 }} placeholder="Valor (R$)" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} />
           <input style={{ ...S.input, width: 160 }} type="date" value={draft.expectedCloseDate} onChange={(e) => setDraft({ ...draft, expectedCloseDate: e.target.value })} />
+          <input style={{ ...S.input, width: 150 }} placeholder="Categoria (opcional)" value={draft.categoria} onChange={(e) => setDraft({ ...draft, categoria: e.target.value })} />
           {isMaster && (
             <select style={{ ...S.input, width: 170 }} value={draft.assignedUserId} onChange={(e) => setDraft({ ...draft, assignedUserId: e.target.value })}>
               <option value="">Atribuir a mim</option>
@@ -184,6 +186,9 @@ export default function FerramentaVendas() {
                     )}
                   </div>
                   <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, color: C.gold, fontWeight: 600 }}>{fmtBRL(l.value)}</div>
+                  {l.categoria && (
+                    <div style={{ fontSize: 10, color: C.inkSoft, background: C.paper, padding: "2px 6px", borderRadius: 5, width: "fit-content" }}>{l.categoria}</div>
+                  )}
                   {l.expectedCloseDate && (
                     <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, color: isOverdue(l) ? C.danger : C.muted }}>
                       <Calendar size={10} />{fmtShortDate(l.expectedCloseDate)}{isOverdue(l) ? " · atrasado" : ""}
@@ -273,6 +278,7 @@ function LeadDetailModal({ lead, onClose }) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [closeDate, setCloseDate] = useState(lead.expectedCloseDate ? lead.expectedCloseDate.slice(0, 10) : "");
+  const [categoria, setCategoria] = useState(lead.categoria || "");
 
   const reload = useCallback(async () => {
     setNotes(await api.leadNotesList(lead.id));
@@ -296,6 +302,10 @@ function LeadDetailModal({ lead, onClose }) {
     await api.leadUpdate(lead.id, { expectedCloseDate: closeDate || null });
   }
 
+  async function saveCategoria() {
+    await api.leadUpdate(lead.id, { categoria: categoria || null });
+  }
+
   function fmtDate(iso) {
     return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   }
@@ -316,6 +326,11 @@ function LeadDetailModal({ lead, onClose }) {
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
           <span style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Fechamento previsto</span>
           <input type="date" style={{ ...S.input, padding: "6px 10px", fontSize: 12 }} value={closeDate} onChange={(e) => setCloseDate(e.target.value)} onBlur={saveCloseDate} />
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+          <span style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Categoria do produto</span>
+          <input style={{ ...S.input, padding: "6px 10px", fontSize: 12, flex: 1 }} placeholder="Ex: Utilidades Domésticas" value={categoria} onChange={(e) => setCategoria(e.target.value)} onBlur={saveCategoria} />
         </div>
 
         <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 12.5, color: C.inkSoft, marginTop: 18, marginBottom: 8 }}>
