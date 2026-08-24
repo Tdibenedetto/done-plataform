@@ -167,9 +167,9 @@ function AuthScreen({ onAuth }) {
 function RadialGraphic() {
   const cx = 200, cy = 200;
   const rings = [50, 90, 130, 170];
-  // Cone de varredura do radar — uma cunha de luz suave, não um traço grosso.
+  // Cone de varredura do radar — agora apontando na diagonal para baixo.
   const sweepAngle = 34; // largura do feixe, em graus
-  const sweepDir = -55; // direção do feixe (graus, 0 = direita, sentido horário)
+  const sweepDir = 55; // direção do feixe (graus; 0 = direita, 90 = baixo)
   const a1 = ((sweepDir - sweepAngle / 2) * Math.PI) / 180;
   const a2 = ((sweepDir + sweepAngle / 2) * Math.PI) / 180;
   const sweepR = 260;
@@ -183,7 +183,7 @@ function RadialGraphic() {
   ];
 
   return (
-    <svg viewBox="0 0 400 400" style={{ width: "100%", maxWidth: 340, margin: "0 auto", display: "block", opacity: 0.95 }}>
+    <svg viewBox="0 0 400 400" style={{ position: "absolute", right: -60, top: "50%", transform: "translateY(-50%)", width: 440, opacity: 0.95, zIndex: 1 }}>
       <defs>
         <radialGradient id="doneGlow" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor={C.gold} stopOpacity="1" />
