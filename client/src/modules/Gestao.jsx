@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Upload, X, List, Target } from "lucide-react";
+import { Upload, X, List, Target, Lightbulb } from "lucide-react";
 import { C, S } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
 
@@ -132,6 +132,55 @@ export default function FerramentaGestao() {
     .map((s) => ({ ...s, margemMedia: Math.round(s.margens.reduce((a, b) => a + b, 0) / s.margens.length), estoque: latestBySku[s.sku]?.estoque }))
     .sort((a, b) => b.valor - a.valor);
 
+  // -------- Insight prescritivo: sugestões automáticas a partir dos dados já enviados --------
+  const skuHistory = {};
+  rows.forEach((r) => {
+    if (!r.sku) return;
+    if (!skuHistory[r.sku]) skuHistory[r.sku] = [];
+    skuHistory[r.sku].push({ status: r.estoque, date: new Date(r._uploadDate) });
+  });
+  Object.values(skuHistory).forEach((h) => h.sort((a, b) => a.date - b.date));
+
+  function daysInCurrentStatus(sku) {
+    const hist = skuHistory[sku];
+    if (!hist || !hist.length) return 0;
+    const latestStatus = hist[hist.length - 1].status;
+    let streakStart = hist[hist.length - 1].date;
+    for (let i = hist.length - 1; i >= 0; i--) {
+      if (hist[i].status !== latestStatus) break;
+      streakStart = hist[i].date;
+    }
+    return Math.max(0, Math.round((hist[hist.length - 1].date - streakStart) / (1000 * 60 * 60 * 24)));
+  }
+
+  const overallAvgMargin = rows.length ? rows.reduce((s, r) => s + r.margem, 0) / rows.length : 0;
+
+  const insights = [];
+  alerts.forEach((a) => {
+    const days = daysInCurrentStatus(a.sku);
+    if (a.estoque === "ruptura") {
+      insights.push({
+        tone: C.danger,
+        text: days > 0
+          ? `"${a.produto}" (${a.sku}) está sem estoque há ${days} dias entre uploads — considere reposição prioritária.`
+          : `"${a.produto}" (${a.sku}) apareceu em ruptura nesta última planilha — vale confirmar o estoque real.`,
+      });
+    } else if (a.estoque === "excesso" && days >= 30) {
+      insights.push({
+        tone: C.gold,
+        text: `"${a.produto}" (${a.sku}) está parado em excesso há ${days} dias — considere promoção ou desconto para girar o estoque.`,
+      });
+    }
+  });
+  catData.forEach((c) => {
+    if (overallAvgMargin > 0 && c.margem < overallAvgMargin - 5) {
+      insights.push({
+        tone: C.ink,
+        text: `A categoria "${c.categoria}" está com margem de ${c.margem}%, abaixo da média geral (${Math.round(overallAvgMargin)}%) — vale revisar a precificação.`,
+      });
+    }
+  });
+
   return (
     <div style={S.moduleCol}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -221,6 +270,20 @@ export default function FerramentaGestao() {
           </div>
         </div>
       </div>
+
+      {insights.length > 0 && (
+        <div style={{ background: C.ink, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.gold, fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>
+            <Lightbulb size={16} /> Sugestões para essa operação
+          </div>
+          {insights.map((ins, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, fontSize: 12.5, lineHeight: 1.5, color: "#E2E4EA" }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: ins.tone === C.danger ? "#E27C63" : ins.tone === C.gold ? C.gold : C.sage, marginTop: 6, flexShrink: 0 }} />
+              <span>{ins.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {showSkus && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
