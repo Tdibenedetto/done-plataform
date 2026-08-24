@@ -40,7 +40,7 @@ export const S = {
   eyebrow: { fontFamily: "Inter", fontWeight: 700, fontSize: 12, letterSpacing: "0.08em", color: C.gold },
   h1: { fontFamily: FONT_DISPLAY, fontSize: 34, fontWeight: 700, lineHeight: 1.1, margin: "8px 0" },
   lead: { fontSize: 15, lineHeight: 1.6, color: C.inkSoft, margin: 0 },
-  input: { fontFamily: "Inter", fontSize: 13, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", width: "100%" },
+  input: { fontFamily: "Inter", fontSize: 13, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", width: "100%", boxSizing: "border-box" },
   primaryBtn: { fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14, background: C.ink, color: C.paper, border: "none", borderRadius: 8, padding: "12px 20px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 },
   primaryBtnSm: { fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 12.5, background: C.ink, color: C.paper, border: "none", borderRadius: 8, padding: "8px 14px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 },
   ghostBtn: { fontFamily: "Inter", fontWeight: 500, fontSize: 13, background: "transparent", color: C.inkSoft, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 14px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 },

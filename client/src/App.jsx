@@ -145,11 +145,11 @@ function AuthScreen({ onAuth }) {
   }
 
   return (
-    <div style={{ fontFamily: "Inter, sans-serif", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.paper, padding: 20 }}>
+    <div style={{ fontFamily: "Inter, sans-serif", minHeight: "100vh", background: C.paper }}>
       <style>{FONT_IMPORT}{RESPONSIVE_CSS}</style>
-      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", width: "100%", maxWidth: 980, borderRadius: 18, overflow: "hidden", boxShadow: "0 30px 60px -20px rgba(28,33,48,.35)" }} className="done-auth-grid">
+      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", minHeight: "100vh" }} className="done-auth-grid">
 
-        <div style={{ background: C.ink, color: "#fff", padding: "48px 44px", display: "flex", flexDirection: "column", justifyContent: "space-between", position: "relative", overflow: "hidden", minHeight: 520 }}>
+        <div style={{ background: C.ink, color: "#fff", padding: "48px 64px", display: "flex", flexDirection: "column", justifyContent: "space-between", position: "relative", overflow: "hidden" }}>
           <div style={{ zIndex: 2 }}>
             <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, letterSpacing: 2, color: C.gold }}>D.O.N.E</div>
             <div style={{ fontSize: 10.5, letterSpacing: "0.12em", color: "#8A8F9C", marginTop: 4 }}>COMMERCIAL OPERATING SYSTEM</div>
@@ -159,10 +159,10 @@ function AuthScreen({ onAuth }) {
 
           <div style={{ zIndex: 2 }}>
             <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 11, letterSpacing: "0.1em", color: C.gold, marginBottom: 10 }}>PLATAFORMA</div>
-            <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 30, lineHeight: 1.25, margin: 0 }}>
+            <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 34, lineHeight: 1.25, margin: 0 }}>
               Clareza para decidir.<br /><span style={{ color: C.gold }}>Disciplina para executar.</span>
             </h1>
-            <p style={{ fontSize: 14, color: "#C7CAD4", lineHeight: 1.6, marginTop: 14, maxWidth: 340 }}>
+            <p style={{ fontSize: 14, color: "#C7CAD4", lineHeight: 1.6, marginTop: 14, maxWidth: 360 }}>
               Diagnóstico, execução e gestão comercial num único lugar — comece pelo Comercial Coach, gratuito.
             </p>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 28, fontSize: 11.5, color: "#8A8F9C" }}>
@@ -171,8 +171,9 @@ function AuthScreen({ onAuth }) {
           </div>
         </div>
 
-        <div style={{ background: C.card, padding: "48px 40px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, margin: "0 0 6px", color: C.ink }}>
+        <div style={{ background: C.card, padding: "48px 64px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div style={{ maxWidth: 380, width: "100%", margin: "0 auto" }}>
+          <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26, margin: "0 0 6px", color: C.ink }}>
             {mode === "login" ? "Entrar na plataforma" : "Criar sua conta"}
           </h2>
           <p style={{ fontSize: 13, color: C.inkSoft, marginBottom: 22 }}>
@@ -181,14 +182,14 @@ function AuthScreen({ onAuth }) {
 
           {mode === "register" && (
             <>
-              <input style={S.input} placeholder="Seu nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <input style={{ ...S.input, marginTop: 10 }} placeholder="Nome da empresa" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
+              <input style={S.input} placeholder="Seu nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} onKeyDown={(e) => e.key === "Enter" && submit()} />
+              <input style={{ ...S.input, marginTop: 10 }} placeholder="Nome da empresa" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} onKeyDown={(e) => e.key === "Enter" && submit()} />
             </>
           )}
-          <input style={{ ...S.input, marginTop: mode === "register" ? 10 : 0 }} placeholder="E-mail" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <input style={{ ...S.input, marginTop: mode === "register" ? 10 : 0 }} placeholder="E-mail" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} onKeyDown={(e) => e.key === "Enter" && submit()} />
           <div style={{ position: "relative", marginTop: 10 }}>
-            <input style={{ ...S.input, paddingRight: 40 }} placeholder="Senha" type={showPw ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-            <button onClick={() => setShowPw((s) => !s)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: C.muted, cursor: "pointer", display: "flex" }}>
+            <input style={{ ...S.input, paddingRight: 40 }} placeholder="Senha" type={showPw ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} onKeyDown={(e) => e.key === "Enter" && submit()} />
+            <button type="button" onClick={() => setShowPw((s) => !s)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: C.muted, cursor: "pointer", display: "flex" }}>
               {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
@@ -200,7 +201,7 @@ function AuthScreen({ onAuth }) {
           </button>
 
           <button
-            style={{ background: "none", border: "none", color: C.inkSoft, fontSize: 12.5, marginTop: 16, cursor: "pointer", textDecoration: "underline", alignSelf: "flex-start" }}
+            style={{ background: "none", border: "none", color: C.inkSoft, fontSize: 12.5, marginTop: 16, cursor: "pointer", textDecoration: "underline", display: "block" }}
             onClick={() => setMode(mode === "login" ? "register" : "login")}
           >
             {mode === "login" ? "Não tem conta? Criar uma agora" : "Já tem conta? Entrar"}
@@ -208,6 +209,7 @@ function AuthScreen({ onAuth }) {
 
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 24, paddingTop: 20, borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.muted }}>
             <ShieldCheck size={13} /> Ambiente seguro e seus dados protegidos
+          </div>
           </div>
         </div>
       </div>
