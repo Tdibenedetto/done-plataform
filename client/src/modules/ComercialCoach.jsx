@@ -7,7 +7,7 @@ import { C, S } from "../theme.js";
 import { api } from "../lib/api.js";
 import { DIMENSIONS, QUESTIONS, rangeFor, MODULE_HINT, MODULE_LABEL } from "./questions.js";
 
-export default function ComercialCoach({ goTo }) {
+export default function ComercialCoach({ goTo, onResult }) {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState(null);
   const [stage, setStage] = useState("landing");
@@ -53,6 +53,7 @@ export default function ComercialCoach({ goTo }) {
     };
     const saved = await api.coachSubmit(payload);
     setResult(saved);
+    if (onResult) onResult(saved);
     setSubmitting(false);
     setStage("results");
   }
@@ -241,3 +242,4 @@ function TrustStat({ n, label }) {
     </div>
   );
 }
+

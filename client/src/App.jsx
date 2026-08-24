@@ -1,39 +1,67 @@
 import React, { useState, useEffect } from "react";
-import { Activity, Trello, BarChart2 } from "lucide-react";
-import { C, S } from "./theme.js";
+import {
+  Activity, Trello, BarChart2, LayoutGrid, Eye, EyeOff,
+  ShieldCheck, Menu, X, Zap,
+} from "lucide-react";
+import { C, S, FONT_DISPLAY, FONT_IMPORT, RESPONSIVE_CSS } from "./theme.js";
 import { api, saveSession, loadSession, clearSession } from "./lib/api.js";
 import ComercialCoach from "./modules/ComercialCoach.jsx";
 import FerramentaVendas from "./modules/Vendas.jsx";
 import FerramentaGestao from "./modules/Gestao.jsx";
 
-const FONT = `@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');`;
+const DIMENSION_LABEL = { processo: "Processo", preco: "Preço", time: "Time", pipeline: "Pipeline" };
 
 export default function App() {
   const [session, setSession] = useState(() => loadSession());
-  const [activeModule, setActiveModule] = useState("coach");
+  const [activeModule, setActiveModule] = useState("overview");
+  const [coachResult, setCoachResult] = useState(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Rota pública de convite: /convite/:token (funciona mesmo sem sessão ativa)
+  // Rota pública de convite: /convite/:token
   const path = window.location.pathname;
   if (path.startsWith("/convite/")) {
     const token = path.replace("/convite/", "");
     return <InviteAcceptScreen token={token} onAuth={(t, u) => { saveSession(t, u); setSession({ token: t, user: u }); window.history.replaceState(null, "", "/"); }} />;
   }
 
+  useEffect(() => {
+    if (session) api.coachLatest().then(setCoachResult).catch(() => setCoachResult(null));
+  }, [session]);
+
   if (!session) {
     return <AuthScreen onAuth={(token, user) => { saveSession(token, user); setSession({ token, user }); }} />;
   }
 
+  function goTo(mod) {
+    setActiveModule(mod);
+    setMobileOpen(false);
+  }
+
   return (
     <div style={S.app}>
-      <style>{FONT}</style>
+      <style>{FONT_IMPORT}{RESPONSIVE_CSS}</style>
+
+      <div className={`done-mobile-topbar`} style={{ alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: C.ink }}>
+        <button onClick={() => setMobileOpen(true)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", display: "flex" }}><Menu size={22} /></button>
+        <div style={{ ...S.wordmark, color: "#fff", padding: 0 }}>D.O.N.E</div>
+        <div style={{ width: 22 }} />
+      </div>
+
+      <div className={`done-sidebar-overlay ${mobileOpen ? "open" : ""}`} onClick={() => setMobileOpen(false)} />
+
       <Sidebar
         active={activeModule}
-        setActive={setActiveModule}
+        setActive={goTo}
         profile={session.user}
         onLogout={() => { clearSession(); setSession(null); }}
+        coachResult={coachResult}
+        mobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
       />
-      <div style={S.content}>
-        {activeModule === "coach" && <ComercialCoach goTo={setActiveModule} />}
+
+      <div className="done-content-wrap" style={S.content}>
+        {activeModule === "overview" && <VisaoGeral coachResult={coachResult} goTo={goTo} />}
+        {activeModule === "coach" && <ComercialCoach goTo={goTo} onResult={setCoachResult} />}
         {activeModule === "vendas" && <FerramentaVendas />}
         {activeModule === "gestao" && <FerramentaGestao />}
       </div>
@@ -41,8 +69,177 @@ export default function App() {
   );
 }
 
+// Placeholder da nova página inicial — a versão completa (com performance, alertas
+// e atividade do time) chega na próxima fase do redesenho.
+function VisaoGeral({ coachResult, goTo }) {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const session = loadSession();
+  const firstName = session?.user?.name?.split(" ")[0] || "";
+
+  return (
+    <div style={S.moduleCol}>
+      <div>
+        <h1 style={{ ...S.h1, fontSize: 30 }}>{greeting}, {firstName}.</h1>
+        <p style={S.lead}>Aqui está o que merece sua atenção hoje.</p>
+      </div>
+
+      {coachResult && (
+        <div style={{ background: C.goldSoft, borderRadius: 14, padding: 20, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ width: 44, height: 44, borderRadius: "50%", background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Zap size={20} color="#fff" />
+          </div>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.gold, letterSpacing: "0.06em" }}>SEU PRÓXIMO MOVIMENTO</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16, color: C.ink, marginTop: 2 }}>
+              Sua nota mais baixa é em {DIMENSION_LABEL[Object.entries(coachResult.dims || {
+                processo: coachResult.dimProcesso, preco: coachResult.dimPreco, time: coachResult.dimTime, pipeline: coachResult.dimPipeline,
+              }).sort((a, b) => a[1] - b[1])[0][0]]}.
+            </div>
+          </div>
+          <button style={S.primaryBtnSm} onClick={() => goTo("coach")}>Ver diagnóstico →</button>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+        <ModuleCard icon={Activity} color={C.gold} title="Comercial Coach" desc="Diagnóstico e plano de ação para evoluir sua operação." onClick={() => goTo("coach")} />
+        <ModuleCard icon={Trello} color={C.sage} title="Ferramenta de Vendas" desc="Gerencie seu funil, faturamento e o time comercial." onClick={() => goTo("vendas")} />
+        <ModuleCard icon={BarChart2} color={C.ink} title="Ferramenta de Gestão" desc="Margem, metas, estoque e indicadores do negócio." onClick={() => goTo("gestao")} />
+      </div>
+    </div>
+  );
+}
+
+function ModuleCard({ icon: Icon, color, title, desc, onClick }) {
+  return (
+    <button onClick={onClick} style={{ textAlign: "left", background: C.card, border: `1px solid ${C.border}`, borderTop: `3px solid ${color}`, borderRadius: 12, padding: 20, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ width: 40, height: 40, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Icon size={18} color="#fff" />
+      </div>
+      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16, color: C.ink }}>{title}</div>
+      <div style={{ fontSize: 12.5, color: C.inkSoft, lineHeight: 1.5 }}>{desc}</div>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color, marginTop: 4 }}>Acessar módulo →</div>
+    </button>
+  );
+}
+
+function AuthScreen({ onAuth }) {
+  const [mode, setMode] = useState("login");
+  const [form, setForm] = useState({ name: "", company: "", email: "", password: "" });
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const fn = mode === "login" ? api.login : api.register;
+      const { token, user } = await fn(form);
+      onAuth(token, user);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ fontFamily: "Inter, sans-serif", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.paper, padding: 20 }}>
+      <style>{FONT_IMPORT}{RESPONSIVE_CSS}</style>
+      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", width: "100%", maxWidth: 980, borderRadius: 18, overflow: "hidden", boxShadow: "0 30px 60px -20px rgba(28,33,48,.35)" }} className="done-auth-grid">
+
+        <div style={{ background: C.ink, color: "#fff", padding: "48px 44px", display: "flex", flexDirection: "column", justifyContent: "space-between", position: "relative", overflow: "hidden", minHeight: 520 }}>
+          <div style={{ zIndex: 2 }}>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, letterSpacing: 2, color: C.gold }}>D.O.N.E</div>
+            <div style={{ fontSize: 10.5, letterSpacing: "0.12em", color: "#8A8F9C", marginTop: 4 }}>COMMERCIAL OPERATING SYSTEM</div>
+          </div>
+
+          <RadialGraphic />
+
+          <div style={{ zIndex: 2 }}>
+            <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 11, letterSpacing: "0.1em", color: C.gold, marginBottom: 10 }}>PLATAFORMA</div>
+            <h1 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 30, lineHeight: 1.25, margin: 0 }}>
+              Clareza para decidir.<br /><span style={{ color: C.gold }}>Disciplina para executar.</span>
+            </h1>
+            <p style={{ fontSize: 14, color: "#C7CAD4", lineHeight: 1.6, marginTop: 14, maxWidth: 340 }}>
+              Diagnóstico, execução e gestão comercial num único lugar — comece pelo Comercial Coach, gratuito.
+            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 28, fontSize: 11.5, color: "#8A8F9C" }}>
+              <ShieldCheck size={14} /> Dados seguros. Decisões melhores.
+            </div>
+          </div>
+        </div>
+
+        <div style={{ background: C.card, padding: "48px 40px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, margin: "0 0 6px", color: C.ink }}>
+            {mode === "login" ? "Entrar na plataforma" : "Criar sua conta"}
+          </h2>
+          <p style={{ fontSize: 13, color: C.inkSoft, marginBottom: 22 }}>
+            {mode === "login" ? "Bem-vindo de volta." : "Leva menos de um minuto."}
+          </p>
+
+          {mode === "register" && (
+            <>
+              <input style={S.input} placeholder="Seu nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <input style={{ ...S.input, marginTop: 10 }} placeholder="Nome da empresa" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
+            </>
+          )}
+          <input style={{ ...S.input, marginTop: mode === "register" ? 10 : 0 }} placeholder="E-mail" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <div style={{ position: "relative", marginTop: 10 }}>
+            <input style={{ ...S.input, paddingRight: 40 }} placeholder="Senha" type={showPw ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            <button onClick={() => setShowPw((s) => !s)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: C.muted, cursor: "pointer", display: "flex" }}>
+              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+
+          {error && <div style={{ color: C.danger, fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+
+          <button style={{ ...S.primaryBtn, marginTop: 18, width: "100%", justifyContent: "center", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={submit}>
+            {busy ? "Aguarde..." : mode === "login" ? "Entrar →" : "Criar conta →"}
+          </button>
+
+          <button
+            style={{ background: "none", border: "none", color: C.inkSoft, fontSize: 12.5, marginTop: 16, cursor: "pointer", textDecoration: "underline", alignSelf: "flex-start" }}
+            onClick={() => setMode(mode === "login" ? "register" : "login")}
+          >
+            {mode === "login" ? "Não tem conta? Criar uma agora" : "Já tem conta? Entrar"}
+          </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 24, paddingTop: 20, borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.muted }}>
+            <ShieldCheck size={13} /> Ambiente seguro e seus dados protegidos
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RadialGraphic() {
+  return (
+    <svg viewBox="0 0 400 260" style={{ position: "absolute", right: -40, top: "50%", transform: "translateY(-50%)", width: 420, opacity: 0.9, zIndex: 1 }}>
+      <defs>
+        <radialGradient id="doneGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={C.gold} stopOpacity="0.9" />
+          <stop offset="100%" stopColor={C.gold} stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="doneBeam" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={C.gold} stopOpacity="0.5" />
+          <stop offset="100%" stopColor={C.gold} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <line x1="230" y1="130" x2="400" y2="230" stroke="url(#doneBeam)" strokeWidth="60" strokeLinecap="round" />
+      {[100, 75, 50, 25].map((r) => (
+        <circle key={r} cx="230" cy="130" r={r} fill="none" stroke={C.gold} strokeOpacity="0.25" strokeWidth="1" />
+      ))}
+      <circle cx="230" cy="130" r="20" fill="url(#doneGlow)" />
+      <circle cx="230" cy="130" r="5" fill={C.gold} />
+    </svg>
+  );
+}
+
 function InviteAcceptScreen({ token, onAuth }) {
-  const [info, setInfo] = useState(null); // null=loading, false=inválido
+  const [info, setInfo] = useState(null);
   const [form, setForm] = useState({ name: "", password: "" });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -64,12 +261,12 @@ function InviteAcceptScreen({ token, onAuth }) {
     }
   }
 
-  if (info === null) return <div style={{ ...S.app, alignItems: "center", justifyContent: "center" }}><style>{FONT}</style></div>;
+  if (info === null) return <div style={{ ...S.app, alignItems: "center", justifyContent: "center" }}><style>{FONT_IMPORT}</style></div>;
 
   if (info === false) {
     return (
       <div style={{ ...S.app, alignItems: "center", justifyContent: "center" }}>
-        <style>{FONT}</style>
+        <style>{FONT_IMPORT}</style>
         <div style={{ textAlign: "center" }}>
           <div style={S.wordmark}>D.O.N.E</div>
           <p style={{ ...S.lead, marginTop: 16 }}>Esse convite é inválido ou já expirou.</p>
@@ -80,7 +277,7 @@ function InviteAcceptScreen({ token, onAuth }) {
 
   return (
     <div style={{ ...S.app, alignItems: "center", justifyContent: "center" }}>
-      <style>{FONT}</style>
+      <style>{FONT_IMPORT}</style>
       <div style={{ maxWidth: 380, width: "100%", padding: 32 }}>
         <div style={S.wordmark}>D.O.N.E</div>
         <h1 style={{ ...S.h1, fontSize: 24, marginTop: 16 }}>Bem-vindo à {info.orgName}</h1>
@@ -96,110 +293,87 @@ function InviteAcceptScreen({ token, onAuth }) {
   );
 }
 
-function AuthScreen({ onAuth }) {
-  const [mode, setMode] = useState("login"); // "login" | "register"
-  const [form, setForm] = useState({ name: "", company: "", email: "", password: "" });
-  const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  async function submit() {
-    setBusy(true);
-    setError(null);
-    try {
-      const fn = mode === "login" ? api.login : api.register;
-      const { token, user } = await fn(form);
-      onAuth(token, user);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div style={{ fontFamily: "Inter, sans-serif", minHeight: "100vh", display: "grid", gridTemplateColumns: "1.1fr 1fr" }}>
-      <style>{FONT}</style>
-
-      <div style={{ background: C.ink, color: "#fff", padding: "56px 60px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 20, letterSpacing: 2, color: C.gold }}>D.O.N.E</div>
-        <div>
-          <div style={{ fontFamily: "Inter", fontWeight: 700, fontSize: 12, letterSpacing: "0.08em", color: C.gold, marginBottom: 14 }}>PLATAFORMA</div>
-          <h1 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 38, lineHeight: 1.15, margin: 0, maxWidth: 420 }}>
-            Sua operação comercial, sob controle.
-          </h1>
-          <p style={{ fontSize: 15, lineHeight: 1.6, color: "#C7CAD4", maxWidth: 380, marginTop: 18 }}>
-            Diagnóstico, execução e gestão comercial num único lugar — comece pelo Comercial Coach, gratuito.
-          </p>
-        </div>
-        <div style={{ fontSize: 12, color: C.muted }}>donestrategy.com</div>
-      </div>
-
-      <div style={{ background: C.paper, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
-        <div style={{ maxWidth: 360, width: "100%" }}>
-          <h2 style={{ ...S.h1, fontSize: 24, margin: "0 0 6px" }}>
-            {mode === "login" ? "Entrar na plataforma" : "Criar sua conta"}
-          </h2>
-          <p style={{ fontSize: 13, color: C.inkSoft, marginBottom: 22 }}>
-            {mode === "login" ? "Bem-vindo de volta." : "Leva menos de um minuto."}
-          </p>
-
-          {mode === "register" && (
-            <>
-              <input style={S.input} placeholder="Seu nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <input style={{ ...S.input, marginTop: 10 }} placeholder="Nome da empresa" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
-            </>
-          )}
-          <input style={{ ...S.input, marginTop: 10 }} placeholder="E-mail" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <input style={{ ...S.input, marginTop: 10 }} placeholder="Senha" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-
-          {error && <div style={{ color: C.danger, fontSize: 12.5, marginTop: 10 }}>{error}</div>}
-
-          <button style={{ ...S.primaryBtn, marginTop: 18, width: "100%", justifyContent: "center", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={submit}>
-            {busy ? "Aguarde..." : mode === "login" ? "Entrar →" : "Criar conta →"}
-          </button>
-
-          <button
-            style={{ background: "none", border: "none", color: C.inkSoft, fontSize: 12.5, marginTop: 16, cursor: "pointer", textDecoration: "underline" }}
-            onClick={() => setMode(mode === "login" ? "register" : "login")}
-          >
-            {mode === "login" ? "Não tem conta? Criar uma agora" : "Já tem conta? Entrar"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Sidebar({ active, setActive, profile, onLogout }) {
+function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen, onCloseMobile }) {
   const isMaster = profile.role === "master";
   const items = [
-    { key: "coach", label: "Comercial Coach", sub: "Diagnóstico", icon: Activity },
-    { key: "vendas", label: "Ferramenta de Vendas", sub: "Pipeline & Metas", icon: Trello },
-    ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gestão", sub: "Dashboard & Estoque", icon: BarChart2 }] : []),
+    { key: "overview", label: "Visão Geral", icon: LayoutGrid },
+    { key: "coach", label: "Comercial Coach", icon: Activity },
+    { key: "vendas", label: "Ferramenta de Vendas", icon: Trello },
+    ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gestão", icon: BarChart2 }] : []),
   ];
+
+  const dims = coachResult ? [
+    { key: "processo", label: "Processo", v: coachResult.dimProcesso },
+    { key: "preco", label: "Preço", v: coachResult.dimPreco },
+    { key: "time", label: "Time", v: coachResult.dimTime },
+    { key: "pipeline", label: "Pipeline", v: coachResult.dimPipeline },
+  ] : [];
+  const weakest = dims.length ? [...dims].sort((a, b) => a.v - b.v)[0] : null;
+
   return (
-    <aside style={S.sidebar}>
-      <div style={S.wordmark}>D.O.N.E</div>
-      <div style={S.sidebarSub}>{profile.company || profile.name}</div>
-      <nav style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10, flex: 1 }}>
-        {items.map((it) => {
-          const Icon = it.icon;
-          const isActive = active === it.key;
-          return (
-            <button key={it.key} onClick={() => setActive(it.key)}
-              style={{ ...S.navItem, background: isActive ? C.ink : "transparent", color: isActive ? C.paper : C.inkSoft, position: "relative" }}>
-              {isActive && <span style={{ position: "absolute", left: -16, top: 8, bottom: 8, width: 3, borderRadius: 3, background: C.gold }} />}
-              <Icon size={16} style={{ flexShrink: 0 }} />
-              <span style={{ display: "flex", flexDirection: "column", gap: 1, textAlign: "left" }}>
+    <>
+      <aside className={`done-sidebar ${mobileOpen ? "open" : ""}`} style={S.sidebar}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={S.wordmark}>D.O.N.E</div>
+            <div style={{ fontSize: 9.5, letterSpacing: "0.1em", color: C.muted, padding: "0 10px" }}>COMMERCIAL OPERATING SYSTEM</div>
+          </div>
+          <button onClick={onCloseMobile} style={{ display: mobileOpen ? "flex" : "none", background: "none", border: "none", color: C.inkSoft, cursor: "pointer" }}><X size={18} /></button>
+        </div>
+
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: C.gold, padding: "20px 10px 8px" }}>NAVEGAÇÃO</div>
+        <nav style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {items.map((it) => {
+            const Icon = it.icon;
+            const isActive = active === it.key;
+            return (
+              <button key={it.key} onClick={() => setActive(it.key)}
+                style={{ ...S.navItem, background: isActive ? C.ink : "transparent", color: isActive ? C.paper : C.inkSoft, position: "relative" }}>
+                {isActive && <span style={{ position: "absolute", left: -16, top: 8, bottom: 8, width: 3, borderRadius: 3, background: C.gold }} />}
+                <span style={{ width: 26, height: 26, borderRadius: "50%", background: isActive ? C.gold : C.paper, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Icon size={13} color={isActive ? "#fff" : C.inkSoft} />
+                </span>
                 <span style={S.navLabel}>{it.label}</span>
-                <span style={{ ...S.navSub, color: isActive ? C.goldSoft : C.muted }}>{it.sub}</span>
-              </span>
-            </button>
-          );
-        })}
-      </nav>
-      <button onClick={onLogout} style={{ ...S.ghostBtn, justifyContent: "center" }}>Sair</button>
-    </aside>
+              </button>
+            );
+          })}
+        </nav>
+
+        {coachResult && (
+          <div style={{ marginTop: 24, background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: 14 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: C.gold }}>NOTA COMERCIAL</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 6 }}>
+              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26, color: "#fff" }}>{coachResult.final}</span>
+              <span style={{ fontSize: 11, color: C.muted }}>/100</span>
+            </div>
+            {weakest && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.08)" }}>
+                <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", color: C.muted }}>FOCO DA SEMANA</div>
+                <div style={{ fontSize: 12.5, color: "#fff", fontWeight: 600, marginTop: 4 }}>{weakest.label}</div>
+                <div style={{ fontSize: 11, color: C.muted }}>nota {Math.round(weakest.v)} — sua prioridade agora</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ fontFamily: FONT_DISPLAY, fontStyle: "italic", fontSize: 12.5, color: "#8A8F9C", lineHeight: 1.5, marginTop: 24, padding: "0 10px" }}>
+          "Clareza para decidir.<br />Disciplina para executar."
+        </div>
+
+        <div style={{ flex: 1 }} />
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, borderTop: `1px solid rgba(255,255,255,.08)`, paddingTop: 16, marginTop: 16 }}>
+          <div style={{ width: 30, height: 30, borderRadius: "50%", background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 12, color: "#fff", flexShrink: 0 }}>
+            {profile.name?.[0]?.toUpperCase() || "?"}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile.name}</div>
+            <div style={{ fontSize: 10.5, color: C.muted }}>{profile.role === "master" ? "Master" : "Vendedor"}</div>
+          </div>
+          <button onClick={onLogout} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 11 }}>Sair</button>
+        </div>
+      </aside>
+    </>
   );
 }
 
