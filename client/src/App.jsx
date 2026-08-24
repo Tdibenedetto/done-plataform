@@ -265,7 +265,7 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
             <div style={S.wordmark}>D.O.N.E</div>
             <div style={{ fontSize: 9.5, letterSpacing: "0.1em", color: C.muted, padding: "0 10px" }}>COMMERCIAL OPERATING SYSTEM</div>
           </div>
-          <button onClick={onCloseMobile} style={{ display: mobileOpen ? "flex" : "none", background: "none", border: "none", color: C.inkSoft, cursor: "pointer" }}><X size={18} /></button>
+          <button onClick={onCloseMobile} style={{ display: mobileOpen ? "flex" : "none", background: "none", border: "none", color: "#C7CAD4", cursor: "pointer" }}><X size={18} /></button>
         </div>
 
         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: C.gold, padding: "20px 10px 8px" }}>NAVEGAÇÃO</div>
@@ -275,10 +275,10 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
             const isActive = active === it.key;
             return (
               <button key={it.key} onClick={() => setActive(it.key)}
-                style={{ ...S.navItem, background: isActive ? C.ink : "transparent", color: isActive ? C.paper : C.inkSoft, position: "relative" }}>
+                style={{ ...S.navItem, background: isActive ? C.gold : "transparent", color: isActive ? "#fff" : "#C7CAD4", position: "relative" }}>
                 {isActive && <span style={{ position: "absolute", left: -16, top: 8, bottom: 8, width: 3, borderRadius: 3, background: C.gold }} />}
-                <span style={{ width: 26, height: 26, borderRadius: "50%", background: isActive ? C.gold : C.paper, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <Icon size={13} color={isActive ? "#fff" : C.inkSoft} />
+                <span style={{ width: 26, height: 26, borderRadius: "50%", background: isActive ? C.ink : "rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Icon size={13} color={isActive ? C.gold : "#C7CAD4"} />
                 </span>
                 <span style={S.navLabel}>{it.label}</span>
               </button>

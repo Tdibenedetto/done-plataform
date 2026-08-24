@@ -29,8 +29,8 @@ export const RESPONSIVE_CSS = `
 
 export const S = {
   app: { fontFamily: "Inter, sans-serif", background: C.paper, color: C.ink, minHeight: "100vh", display: "flex" },
-  sidebar: { width: 240, borderRight: `1px solid ${C.border}`, padding: "24px 16px", display: "flex", flexDirection: "column", flexShrink: 0 },
-  wordmark: { fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, padding: "0 10px" },
+  sidebar: { width: 240, background: C.ink, color: "#C7CAD4", padding: "24px 16px", display: "flex", flexDirection: "column", flexShrink: 0, overflowY: "auto" },
+  wordmark: { fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, padding: "0 10px", color: C.gold },
   sidebarSub: { fontSize: 11.5, color: C.muted, padding: "0 10px", marginBottom: 6 },
   navItem: { textAlign: "left", border: "none", borderRadius: 10, padding: "10px 12px", display: "flex", gap: 10, alignItems: "center", cursor: "pointer" },
   navLabel: { fontFamily: "'Space Grotesk',sans-serif", fontSize: 13.5, fontWeight: 600 },
