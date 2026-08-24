@@ -77,6 +77,7 @@ model Lead {
   assignedUser   User?        @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
   name           String
   value          Float        @default(0)
+  categoria      String?
   stage          String       @default("Novo Lead")
   lostReason     String?
   expectedCloseDate DateTime?
