@@ -55,10 +55,15 @@ router.post("/cnpj", async (req, res) => {
   let data;
   try {
     const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${clean}`);
-    if (!resp.ok) return res.status(404).json({ error: "CNPJ não encontrado na base da Receita Federal." });
+    if (resp.status === 404) {
+      return res.status(404).json({ error: "Esse CNPJ não foi encontrado na base da Receita Federal — confira se está correto." });
+    }
+    if (!resp.ok) {
+      return res.status(502).json({ error: `A consulta à Receita Federal falhou (código ${resp.status}). Tente novamente em alguns segundos.` });
+    }
     data = await resp.json();
   } catch (e) {
-    return res.status(502).json({ error: "Não foi possível consultar o CNPJ agora. Tente novamente." });
+    return res.status(502).json({ error: "Não foi possível consultar o CNPJ agora — verifique sua conexão e tente de novo." });
   }
 
   const record = await prisma.creditAnalysis.create({
