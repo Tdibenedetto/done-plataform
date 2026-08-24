@@ -25,6 +25,7 @@ export default function FerramentaGestao() {
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [showSkus, setShowSkus] = useState(false);
+  const [mapNotice, setMapNotice] = useState(null);
 
   async function reload() {
     const [all, gs] = await Promise.all([api.gestaoAll(), api.gestaoGoals()]);
@@ -38,8 +39,12 @@ export default function FerramentaGestao() {
     if (!file) return;
     setUploading(true);
     setError(null);
+    setMapNotice(null);
     try {
-      await api.gestaoUpload(file);
+      const result = await api.gestaoUpload(file);
+      if (result.autoMapped) {
+        setMapNotice("A planilha não estava no formato padrão — a IA identificou as colunas automaticamente.");
+      }
       await reload();
     } catch (err) {
       setError(err.message);
@@ -79,8 +84,8 @@ export default function FerramentaGestao() {
         <div style={{ border: `1.5px dashed ${C.border}`, borderRadius: 14, padding: 40, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
           <Upload size={28} color={C.gold} />
           <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15 }}>Envie um arquivo CSV</div>
-          <div style={{ fontSize: 12.5, color: C.muted, maxWidth: 380 }}>
-            Colunas esperadas: mes, categoria, produto, sku, valor, margem, estoque (ok / ruptura / excesso)
+          <div style={{ fontSize: 12.5, color: C.muted, maxWidth: 400 }}>
+            Pode ser sua planilha do jeito que já usa — a IA identifica as colunas automaticamente. Se preferir o formato exato, use: mes, categoria, produto, sku, valor, margem, estoque.
           </div>
           <label style={{ ...S.primaryBtnSm, cursor: "pointer" }}>
             {uploading ? "Enviando..." : "Selecionar arquivo"}
@@ -199,6 +204,11 @@ export default function FerramentaGestao() {
         </div>
       </div>
       {error && <div style={{ color: C.danger, fontSize: 12 }}>{error}</div>}
+      {mapNotice && (
+        <div style={{ background: C.goldSoft, color: C.gold, fontSize: 12, padding: "8px 12px", borderRadius: 8 }}>
+          ✨ {mapNotice}
+        </div>
+      )}
 
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", alignItems: "center", gap: 16 }}>
         <div>
