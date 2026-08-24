@@ -1,13 +1,21 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Plus, Trash2, UserPlus, X, Mail, MessageSquare, Calendar, Filter, TrendingUp } from "lucide-react";
+import { Plus, Trash2, UserPlus, X, Mail, MessageSquare, Calendar, Filter, TrendingUp, DollarSign, Briefcase } from "lucide-react";
 import { C, S } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
 
-const STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação", "Fechado", "Perdido"];
+const STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação", "Fechado", "Carteira", "Faturado Total", "Perdido"];
+const PIPELINE_STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação"]; // avançam com ◀ ▶ simples
 const MONTHS_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const currentMonth = () => new Date().toISOString().slice(0, 7); // "2026-08"
+
+function totalInvoiced(lead) {
+  return (lead.invoiceEvents || []).reduce((s, e) => s + e.amount, 0);
+}
+function saldoRestante(lead) {
+  return Math.max(0, lead.value - totalInvoiced(lead));
+}
 
 export default function FerramentaVendas() {
   const session = loadSession();
@@ -20,10 +28,14 @@ export default function FerramentaVendas() {
   const [showTeam, setShowTeam] = useState(false);
   const [showMetrics, setShowMetrics] = useState(false);
   const [showAnnual, setShowAnnual] = useState(false);
+  const [showCarteira, setShowCarteira] = useState(false);
   const [draft, setDraft] = useState({ name: "", value: "", assignedUserId: "", expectedCloseDate: "", categoria: "" });
-  const [lostFor, setLostFor] = useState(null); // lead sendo marcado como perdido
+  const [lostFor, setLostFor] = useState(null);
   const [lostReason, setLostReason] = useState("");
-  const [openLead, setOpenLead] = useState(null); // lead com o painel de notas aberto
+  const [invoiceFor, setInvoiceFor] = useState(null); // lead sendo faturado agora
+  const [invoiceAmount, setInvoiceAmount] = useState("");
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const [openLead, setOpenLead] = useState(null);
   const [filters, setFilters] = useState({ assignedUserId: "", minValue: "", maxValue: "" });
 
   const reload = useCallback(async () => {
@@ -61,10 +73,15 @@ export default function FerramentaVendas() {
     setShowForm(false);
     reload();
   }
-  async function moveLead(lead, dir) {
-    const idx = STAGES.indexOf(lead.stage);
-    const next = STAGES[Math.min(Math.max(idx + dir, 0), STAGES.length - 2)]; // não avança automaticamente para "Perdido"
-    await api.leadUpdate(lead.id, { stage: next });
+  async function movePipeline(lead, dir) {
+    const idx = PIPELINE_STAGES.indexOf(lead.stage);
+    if (idx === -1) return; // já passou do pipeline normal
+    if (dir > 0 && idx === PIPELINE_STAGES.length - 1) {
+      await api.leadUpdate(lead.id, { stage: "Fechado" });
+    } else {
+      const next = PIPELINE_STAGES[Math.min(Math.max(idx + dir, 0), PIPELINE_STAGES.length - 1)];
+      await api.leadUpdate(lead.id, { stage: next });
+    }
     reload();
   }
   async function markLost(lead) {
@@ -78,17 +95,35 @@ export default function FerramentaVendas() {
     await api.goalSet({ userId, target: Number(value) || 0, month: currentMonth() });
     reload();
   }
+  async function confirmInvoice() {
+    if (!invoiceAmount || Number(invoiceAmount) <= 0) return;
+    setInvoiceBusy(true);
+    try {
+      await api.leadInvoice(invoiceFor.id, invoiceAmount);
+      setInvoiceFor(null);
+      setInvoiceAmount("");
+      reload();
+    } finally {
+      setInvoiceBusy(false);
+    }
+  }
 
   const activeStages = STAGES.filter((s) => s !== "Perdido");
-  const totalClosed = leads.filter((l) => l.stage === "Fechado").reduce((s, l) => s + l.value, 0);
-  const monthGoals = goals.filter((g) => g.month === currentMonth());
+
+  // Meta bate no FATURADO do mês vigente, não no Fechado — cada lançamento conta no mês em que foi feito.
+  const monthKey = currentMonth();
+  const monthRealized = leads.reduce((sum, l) => {
+    const evs = (l.invoiceEvents || []).filter((e) => e.date.slice(0, 7) === monthKey);
+    return sum + evs.reduce((s, e) => s + e.amount, 0);
+  }, 0);
+  const monthGoals = goals.filter((g) => g.month === monthKey);
   const overallTarget = monthGoals.reduce((s, g) => s + g.target, 0) || 1;
-  const pct = Math.min(100, Math.round((totalClosed / overallTarget) * 100));
+  const pct = Math.min(100, Math.round((monthRealized / overallTarget) * 100));
 
   const filtersActive = filters.assignedUserId || filters.minValue || filters.maxValue;
 
   function isOverdue(l) {
-    return l.expectedCloseDate && l.stage !== "Fechado" && l.stage !== "Perdido" && new Date(l.expectedCloseDate) < new Date();
+    return l.expectedCloseDate && l.stage !== "Faturado Total" && l.stage !== "Perdido" && new Date(l.expectedCloseDate) < new Date();
   }
   function fmtShortDate(iso) {
     return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
@@ -100,10 +135,11 @@ export default function FerramentaVendas() {
         <div>
           <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Vendas</h2>
           <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>
-            {isMaster ? "Pipeline do time — leads, metas e equipe." : "Seu pipeline e suas metas."}
+            {isMaster ? "Pipeline do time — leads, faturamento e equipe." : "Seu pipeline e seu faturamento."}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button style={S.ghostBtn} onClick={() => setShowCarteira((s) => !s)}><Briefcase size={14} /> Carteira</button>
           <button style={S.ghostBtn} onClick={() => setShowAnnual((s) => !s)}><Calendar size={14} /> Meta anual</button>
           <button style={S.ghostBtn} onClick={() => setShowMetrics((s) => !s)}><TrendingUp size={14} /> Métricas</button>
           {isMaster && (
@@ -115,12 +151,13 @@ export default function FerramentaVendas() {
       {isMaster && showTeam && <TeamPanel team={team} onChange={reload} />}
       {showMetrics && <MetricsPanel leads={leads} />}
       {showAnnual && <AnnualGoalsPanel team={team} goals={goals} leads={leads} isMaster={isMaster} onChange={reload} />}
+      {showCarteira && <CarteiraPanel team={team} leads={leads} isMaster={isMaster} />}
 
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", alignItems: "center", gap: 16 }}>
         <div>
-          <div style={{ fontSize: 12, color: C.muted }}>Fechado no mês</div>
+          <div style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}><DollarSign size={11} /> Faturado no mês</div>
           <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 19 }}>
-            {fmtBRL(totalClosed)} <span style={{ fontWeight: 400, fontSize: 13, color: C.muted }}>de {fmtBRL(overallTarget)}</span>
+            {fmtBRL(monthRealized)} <span style={{ fontWeight: 400, fontSize: 13, color: C.muted }}>de {fmtBRL(overallTarget)}</span>
           </div>
         </div>
         <div style={{ flex: 1, height: 8, background: C.border, borderRadius: 999, overflow: "hidden" }}>
@@ -168,48 +205,69 @@ export default function FerramentaVendas() {
         <span style={{ fontSize: 11.5, color: C.muted, marginLeft: "auto" }}>{filteredLeads.length} de {leads.length} leads</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
-        {activeStages.map((stage) => (
-          <div key={stage} style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
-            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, fontWeight: 600, color: C.inkSoft, display: "flex", justifyContent: "space-between", borderBottom: `2px solid ${C.border}`, paddingBottom: 8 }}>
-              {stage}<span style={{ color: C.muted, fontWeight: 500 }}>{filteredLeads.filter((l) => l.stage === stage).length}</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
-              {filteredLeads.filter((l) => l.stage === stage).map((l) => (
-                <div key={l.id} onClick={() => setOpenLead(l)} style={{ background: C.card, border: `1px solid ${isOverdue(l) ? C.danger : C.border}`, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 6, cursor: "pointer" }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3, display: "flex", justifyContent: "space-between", gap: 6 }}>
-                    <span>{l.name}</span>
-                    {l._count?.notes > 0 && (
-                      <span style={{ display: "flex", alignItems: "center", gap: 2, color: C.muted, flexShrink: 0 }}>
-                        <MessageSquare size={11} />{l._count.notes}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, color: C.gold, fontWeight: 600 }}>{fmtBRL(l.value)}</div>
-                  {l.categoria && (
-                    <div style={{ fontSize: 10, color: C.inkSoft, background: C.paper, padding: "2px 6px", borderRadius: 5, width: "fit-content" }}>{l.categoria}</div>
-                  )}
-                  {l.expectedCloseDate && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, color: isOverdue(l) ? C.danger : C.muted }}>
-                      <Calendar size={10} />{fmtShortDate(l.expectedCloseDate)}{isOverdue(l) ? " · atrasado" : ""}
-                    </div>
-                  )}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 10.5, color: C.muted }}>{l.assignedUser?.name || "—"}</span>
-                    <span style={{ display: "flex", gap: 4 }} onClick={(e) => e.stopPropagation()}>
-                      <button style={S.moveBtn} disabled={stage === activeStages[0]} onClick={() => moveLead(l, -1)}>◀</button>
-                      <button style={S.moveBtn} disabled={stage === "Fechado"} onClick={() => moveLead(l, 1)}>▶</button>
-                      {stage !== "Fechado" && (
-                        <button style={{ ...S.moveBtn, color: C.danger }} title="Marcar como perdido" onClick={() => setLostFor(l)}>✕</button>
+      <div style={{ overflowX: "auto", paddingBottom: 6 }}>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${activeStages.length}, minmax(160px, 1fr))`, gap: 12, minWidth: activeStages.length * 170 }}>
+          {activeStages.map((stage) => (
+            <div key={stage} style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 11.5, fontWeight: 600, color: C.inkSoft, display: "flex", justifyContent: "space-between", borderBottom: `2px solid ${C.border}`, paddingBottom: 8 }}>
+                {stage}<span style={{ color: C.muted, fontWeight: 500 }}>{filteredLeads.filter((l) => l.stage === stage).length}</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
+                {filteredLeads.filter((l) => l.stage === stage).map((l) => (
+                  <div key={l.id} onClick={() => setOpenLead(l)} style={{ background: C.card, border: `1px solid ${isOverdue(l) ? C.danger : C.border}`, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 6, cursor: "pointer" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3, display: "flex", justifyContent: "space-between", gap: 6 }}>
+                      <span>{l.name}</span>
+                      {l._count?.notes > 0 && (
+                        <span style={{ display: "flex", alignItems: "center", gap: 2, color: C.muted, flexShrink: 0 }}>
+                          <MessageSquare size={11} />{l._count.notes}
+                        </span>
                       )}
-                      <button style={{ ...S.moveBtn, color: C.danger }} onClick={() => removeLead(l.id)}><Trash2 size={10} /></button>
-                    </span>
+                    </div>
+
+                    {stage === "Carteira" ? (
+                      <>
+                        <div style={{ fontSize: 10.5, color: C.muted }}>Total: {fmtBRL(l.value)}</div>
+                        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, color: C.sage, fontWeight: 600 }}>Faturado: {fmtBRL(totalInvoiced(l))}</div>
+                        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, color: C.gold, fontWeight: 700 }}>Saldo: {fmtBRL(saldoRestante(l))}</div>
+                      </>
+                    ) : (
+                      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, color: C.gold, fontWeight: 600 }}>{fmtBRL(l.value)}</div>
+                    )}
+
+                    {l.categoria && (
+                      <div style={{ fontSize: 10, color: C.inkSoft, background: C.paper, padding: "2px 6px", borderRadius: 5, width: "fit-content" }}>{l.categoria}</div>
+                    )}
+                    {l.expectedCloseDate && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, color: isOverdue(l) ? C.danger : C.muted }}>
+                        <Calendar size={10} />{fmtShortDate(l.expectedCloseDate)}{isOverdue(l) ? " · atrasado" : ""}
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 10.5, color: C.muted }}>{l.assignedUser?.name || "—"}</span>
+                      <span style={{ display: "flex", gap: 4 }} onClick={(e) => e.stopPropagation()}>
+                        {PIPELINE_STAGES.includes(stage) && (
+                          <>
+                            <button style={S.moveBtn} disabled={stage === PIPELINE_STAGES[0]} onClick={() => movePipeline(l, -1)}>◀</button>
+                            <button style={S.moveBtn} onClick={() => movePipeline(l, 1)}>▶</button>
+                            <button style={{ ...S.moveBtn, color: C.danger }} title="Marcar como perdido" onClick={() => setLostFor(l)}>✕</button>
+                          </>
+                        )}
+                        {stage === "Fechado" && (
+                          <button style={{ ...S.primaryBtnSm, padding: "4px 8px", fontSize: 10 }} onClick={() => setInvoiceFor(l)}>Faturar</button>
+                        )}
+                        {stage === "Carteira" && (
+                          <button style={{ ...S.primaryBtnSm, padding: "4px 8px", fontSize: 10 }} onClick={() => setInvoiceFor(l)}>Lançar</button>
+                        )}
+                        <button style={{ ...S.moveBtn, color: C.danger }} onClick={() => removeLead(l.id)}><Trash2 size={10} /></button>
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {leads.some((l) => l.stage === "Perdido") && (
@@ -239,6 +297,22 @@ export default function FerramentaVendas() {
         </div>
       )}
 
+      {invoiceFor && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(28,33,48,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
+          <div style={{ background: C.card, borderRadius: 14, padding: 24, width: 380 }}>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Registrar faturamento — "{invoiceFor.name}"</div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
+              Total do pedido: {fmtBRL(invoiceFor.value)} · Já faturado: {fmtBRL(totalInvoiced(invoiceFor))} · Saldo: {fmtBRL(saldoRestante(invoiceFor))}
+            </div>
+            <input style={S.input} placeholder="Valor faturado agora (R$)" value={invoiceAmount} onChange={(e) => setInvoiceAmount(e.target.value)} />
+            <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
+              <button style={S.ghostBtn} onClick={() => { setInvoiceFor(null); setInvoiceAmount(""); }}>Cancelar</button>
+              <button style={S.primaryBtnSm} disabled={invoiceBusy} onClick={confirmInvoice}>{invoiceBusy ? "Salvando..." : "Confirmar"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {openLead && (
         <LeadDetailModal
           lead={openLead}
@@ -247,12 +321,14 @@ export default function FerramentaVendas() {
       )}
 
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Metas do time (mês atual)</div>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Faturado no mês, por vendedor</div>
         {team.users.map((u) => {
-          const closed = leads.filter((l) => l.assignedUser?.id === u.id && l.stage === "Fechado").reduce((s, l) => s + l.value, 0);
+          const realized = leads
+            .filter((l) => l.assignedUser?.id === u.id)
+            .reduce((sum, l) => sum + (l.invoiceEvents || []).filter((e) => e.date.slice(0, 7) === monthKey).reduce((s, e) => s + e.amount, 0), 0);
           const goal = monthGoals.find((g) => g.user?.id === u.id);
           const target = goal ? goal.target : 0;
-          const p = target ? Math.min(100, Math.round((closed / target) * 100)) : 0;
+          const p = target ? Math.min(100, Math.round((realized / target) * 100)) : 0;
           return (
             <div key={u.id} style={{ display: "grid", gridTemplateColumns: "140px 1fr 140px", alignItems: "center", gap: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 500 }}>{u.name} {u.role === "master" && <span style={{ color: C.muted, fontSize: 10.5 }}>(master)</span>}</div>
@@ -279,6 +355,7 @@ function LeadDetailModal({ lead, onClose }) {
   const [busy, setBusy] = useState(false);
   const [closeDate, setCloseDate] = useState(lead.expectedCloseDate ? lead.expectedCloseDate.slice(0, 10) : "");
   const [categoria, setCategoria] = useState(lead.categoria || "");
+  const [margemReal, setMargemReal] = useState(lead.margemReal ?? "");
 
   const reload = useCallback(async () => {
     setNotes(await api.leadNotesList(lead.id));
@@ -301,24 +378,31 @@ function LeadDetailModal({ lead, onClose }) {
   async function saveCloseDate() {
     await api.leadUpdate(lead.id, { expectedCloseDate: closeDate || null });
   }
-
   async function saveCategoria() {
     await api.leadUpdate(lead.id, { categoria: categoria || null });
+  }
+  async function saveMargem() {
+    await api.leadUpdate(lead.id, { margemReal: margemReal === "" ? null : margemReal });
   }
 
   function fmtDate(iso) {
     return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   }
 
+  const invoiced = totalInvoiced(lead);
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(28,33,48,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }} onClick={onClose}>
-      <div style={{ background: C.card, borderRadius: 14, padding: 24, width: 440, maxHeight: "80vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ background: C.card, borderRadius: 14, padding: 24, width: 460, maxHeight: "85vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 16 }}>{lead.name}</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
               {fmtBRL(lead.value)} · {lead.stage} · {lead.assignedUser?.name || "—"}
             </div>
+            {invoiced > 0 && (
+              <div style={{ fontSize: 11.5, color: C.sage, marginTop: 4 }}>Faturado até agora: {fmtBRL(invoiced)}</div>
+            )}
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}><X size={18} /></button>
         </div>
@@ -332,6 +416,26 @@ function LeadDetailModal({ lead, onClose }) {
           <span style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Categoria do produto</span>
           <input style={{ ...S.input, padding: "6px 10px", fontSize: 12, flex: 1 }} placeholder="Ex: Utilidades Domésticas" value={categoria} onChange={(e) => setCategoria(e.target.value)} onBlur={saveCategoria} />
         </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+          <span style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Margem real (%)</span>
+          <input style={{ ...S.input, padding: "6px 10px", fontSize: 12, width: 100 }} placeholder="Ex: 32" value={margemReal} onChange={(e) => setMargemReal(e.target.value)} onBlur={saveMargem} />
+          <span style={{ fontSize: 10.5, color: C.muted }}>opcional — se vazio, usamos a média da categoria</span>
+        </div>
+
+        {lead.invoiceEvents && lead.invoiceEvents.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 12, color: C.inkSoft, marginBottom: 6 }}>Lançamentos de faturamento</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {lead.invoiceEvents.map((e) => (
+                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: C.inkSoft }}>
+                  <span>{fmtDate(e.date)}</span>
+                  <span style={{ fontWeight: 600, color: C.sage }}>{fmtBRL(e.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 12.5, color: C.inkSoft, marginTop: 18, marginBottom: 8 }}>
           Histórico e notas
@@ -365,7 +469,7 @@ function LeadDetailModal({ lead, onClose }) {
 
 function MetricsPanel({ leads }) {
   const metrics = useMemo(() => {
-    const closed = leads.filter((l) => l.stage === "Fechado");
+    const closed = leads.filter((l) => ["Fechado", "Carteira", "Faturado Total"].includes(l.stage));
     const lost = leads.filter((l) => l.stage === "Perdido");
     const decided = closed.length + lost.length;
     const winRate = decided ? Math.round((closed.length / decided) * 100) : null;
@@ -418,7 +522,7 @@ function MetricsPanel({ leads }) {
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={metrics.funnel}>
             <CartesianGrid stroke={C.border} vertical={false} />
-            <XAxis dataKey="stage" tick={{ fill: C.inkSoft, fontSize: 10.5, fontFamily: "Inter" }} axisLine={{ stroke: C.border }} tickLine={false} />
+            <XAxis dataKey="stage" tick={{ fill: C.inkSoft, fontSize: 9.5, fontFamily: "Inter" }} axisLine={{ stroke: C.border }} tickLine={false} />
             <YAxis allowDecimals={false} tick={{ fill: C.muted, fontSize: 10.5, fontFamily: "Inter" }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${C.border}`, fontFamily: "Inter", fontSize: 12 }} />
             <Bar dataKey="leads" fill={C.gold} radius={[6, 6, 0, 0]} />
@@ -431,7 +535,7 @@ function MetricsPanel({ leads }) {
 
 function AnnualGoalsPanel({ team, goals, leads, isMaster, onChange }) {
   const year = new Date().getFullYear();
-  const [local, setLocal] = useState({}); // "userId-mm" -> valor digitado (rascunho)
+  const [local, setLocal] = useState({});
   const [saving, setSaving] = useState(null);
 
   function goalFor(userId, mm) {
@@ -459,9 +563,10 @@ function AnnualGoalsPanel({ team, goals, leads, isMaster, onChange }) {
           const g = goals.find((g) => g.user?.id === u.id && g.month === `${year}-${mm}`);
           return sum + (g ? g.target : 0);
         }, 0);
+        // YTD = soma de todos os lançamentos de faturamento do vendedor no ano corrente (não o valor do lead fechado).
         const ytdAchieved = leads
-          .filter((l) => l.assignedUser?.id === u.id && l.stage === "Fechado" && new Date(l.updatedAt).getFullYear() === year)
-          .reduce((s, l) => s + l.value, 0);
+          .filter((l) => l.assignedUser?.id === u.id)
+          .reduce((sum, l) => sum + (l.invoiceEvents || []).filter((e) => new Date(e.date).getFullYear() === year).reduce((s, e) => s + e.amount, 0), 0);
         const ytdPct = annualTarget ? Math.min(100, Math.round((ytdAchieved / annualTarget) * 100)) : 0;
 
         return (
@@ -499,6 +604,63 @@ function AnnualGoalsPanel({ team, goals, leads, isMaster, onChange }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function CarteiraPanel({ team, leads, isMaster }) {
+  const [vendorFilter, setVendorFilter] = useState("");
+
+  const carteiraLeads = leads.filter((l) => l.stage === "Carteira" && (!vendorFilter || l.assignedUser?.id === vendorFilter));
+  const totalSaldo = carteiraLeads.reduce((s, l) => s + saldoRestante(l), 0);
+
+  const byVendor = {};
+  leads.filter((l) => l.stage === "Carteira").forEach((l) => {
+    const name = l.assignedUser?.name || "Sem vendedor";
+    byVendor[name] = (byVendor[name] || 0) + saldoRestante(l);
+  });
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5 }}>Carteira acumulada</div>
+        {isMaster && (
+          <select style={{ ...S.input, width: 180, padding: "6px 10px", fontSize: 12 }} value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)}>
+            <option value="">Toda a equipe</option>
+            {team.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        )}
+      </div>
+
+      <div>
+        <div style={{ fontSize: 12, color: C.muted }}>Saldo total em carteira{vendorFilter ? " (filtrado)" : ""}</div>
+        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 28, color: C.gold }}>{fmtBRL(totalSaldo)}</div>
+      </div>
+
+      {isMaster && !vendorFilter && Object.keys(byVendor).length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>POR VENDEDOR</div>
+          {Object.entries(byVendor).sort((a, b) => b[1] - a[1]).map(([name, saldo]) => (
+            <div key={name} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+              <span>{name}</span>
+              <span style={{ fontWeight: 600, color: C.sage }}>{fmtBRL(saldo)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {carteiraLeads.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+          <div style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>PEDIDOS EM CARTEIRA</div>
+          {carteiraLeads.map((l) => (
+            <div key={l.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+              <span>{l.name} <span style={{ color: C.muted }}>· {l.assignedUser?.name}</span></span>
+              <span style={{ fontWeight: 600, color: C.gold }}>{fmtBRL(saldoRestante(l))}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {carteiraLeads.length === 0 && <div style={{ fontSize: 12, color: C.muted }}>Nenhum pedido em carteira no momento.</div>}
     </div>
   );
 }
@@ -565,3 +727,4 @@ function TeamPanel({ team, onChange }) {
     </div>
   );
 }
+

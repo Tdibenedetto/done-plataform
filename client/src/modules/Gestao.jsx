@@ -163,7 +163,7 @@ export default function FerramentaGestao() {
   const overallAvgMargin = rows.length ? rows.reduce((s, r) => s + r.margem, 0) / rows.length : 0;
 
   // -------- Visão cruzada: vendas fechadas (Ferramenta de Vendas) x margem por categoria (Ferramenta de Gestão) --------
-  const closedLeads = leads.filter((l) => l.stage === "Fechado" && l.categoria);
+  const closedLeads = leads.filter((l) => ["Fechado", "Carteira", "Faturado Total"].includes(l.stage) && l.categoria);
   const marginByCategoria = {};
   catData.forEach((c) => { marginByCategoria[c.categoria] = c.margem; });
 
@@ -172,7 +172,8 @@ export default function FerramentaGestao() {
     const seller = l.assignedUser?.name || "Sem vendedor";
     if (!bySeller[seller]) bySeller[seller] = { total: 0, weightedMargin: 0, knownMarginTotal: 0 };
     bySeller[seller].total += l.value;
-    const margin = marginByCategoria[l.categoria];
+    // Usa a margem real informada no lead quando existir; senão, cai na média da categoria.
+    const margin = l.margemReal !== null && l.margemReal !== undefined ? l.margemReal : marginByCategoria[l.categoria];
     if (margin !== undefined) {
       bySeller[seller].weightedMargin += l.value * margin;
       bySeller[seller].knownMarginTotal += l.value;
@@ -379,3 +380,4 @@ function StatCard({ label, value, tone }) {
     </div>
   );
 }
+

@@ -81,13 +81,25 @@ model Lead {
   stage          String       @default("Novo Lead")
   lostReason     String?
   expectedCloseDate DateTime?
+  margemReal     Float?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
   notes LeadNote[]
+  invoiceEvents InvoiceEvent[]
 
   @@index([organizationId])
   @@index([assignedUserId])
+}
+
+model InvoiceEvent {
+  id        String   @id @default(uuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  amount    Float
+  date      DateTime @default(now())
+
+  @@index([leadId])
 }
 
 model LeadNote {
@@ -162,3 +174,4 @@ model Payment {
 
   @@index([organizationId])
 }
+

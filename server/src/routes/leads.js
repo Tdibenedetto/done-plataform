@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
-const STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação", "Fechado", "Perdido"];
+const STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação", "Fechado", "Carteira", "Faturado Total", "Perdido"];
 
 function leadWhere(req, id) {
   return req.userRole === "master"
@@ -16,7 +16,11 @@ router.get("/", async (req, res) => {
     : { organizationId: req.organizationId, assignedUserId: req.userId };
   const leads = await prisma.lead.findMany({
     where,
-    include: { assignedUser: { select: { id: true, name: true } }, _count: { select: { notes: true } } },
+    include: {
+      assignedUser: { select: { id: true, name: true } },
+      _count: { select: { notes: true } },
+      invoiceEvents: { select: { id: true, amount: true, date: true }, orderBy: { date: "asc" } },
+    },
     orderBy: { createdAt: "asc" },
   });
   res.json(leads);
@@ -43,13 +47,17 @@ router.post("/", async (req, res) => {
       expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null,
       categoria: categoria || null,
     },
-    include: { assignedUser: { select: { id: true, name: true } }, _count: { select: { notes: true } } },
+    include: {
+      assignedUser: { select: { id: true, name: true } },
+      _count: { select: { notes: true } },
+      invoiceEvents: true,
+    },
   });
   res.json(lead);
 });
 
 router.patch("/:id", async (req, res) => {
-  const { stage, lostReason, expectedCloseDate, categoria } = req.body;
+  const { stage, lostReason, expectedCloseDate, categoria, margemReal } = req.body;
   if (stage && !STAGES.includes(stage)) return res.status(400).json({ error: "Etapa inválida." });
 
   const existing = await prisma.lead.findFirst({ where: leadWhere(req, req.params.id) });
@@ -60,6 +68,7 @@ router.patch("/:id", async (req, res) => {
   if (lostReason !== undefined) data.lostReason = lostReason;
   if (expectedCloseDate !== undefined) data.expectedCloseDate = expectedCloseDate ? new Date(expectedCloseDate) : null;
   if (categoria !== undefined) data.categoria = categoria || null;
+  if (margemReal !== undefined) data.margemReal = margemReal === null || margemReal === "" ? null : Number(margemReal);
 
   await prisma.lead.update({ where: { id: existing.id }, data });
 
@@ -80,6 +89,32 @@ router.delete("/:id", async (req, res) => {
   const where = leadWhere(req, req.params.id);
   await prisma.lead.deleteMany({ where });
   res.json({ ok: true });
+});
+
+// -------- Faturamento --------
+// Registra um valor faturado agora. Se somado bater o valor total do pedido,
+// o lead vai para "Faturado Total"; senão, fica em "Carteira" com o saldo restante.
+router.post("/:id/invoice", async (req, res) => {
+  const { amount } = req.body;
+  const amt = Number(amount);
+  if (!amt || amt <= 0) return res.status(400).json({ error: "Informe um valor de faturamento válido." });
+
+  const lead = await prisma.lead.findFirst({
+    where: leadWhere(req, req.params.id),
+    include: { invoiceEvents: true },
+  });
+  if (!lead) return res.status(404).json({ error: "Lead não encontrado." });
+  if (!["Fechado", "Carteira"].includes(lead.stage)) {
+    return res.status(400).json({ error: "Só é possível faturar pedidos em Fechado ou Carteira." });
+  }
+
+  await prisma.invoiceEvent.create({ data: { leadId: lead.id, amount: amt } });
+
+  const totalInvoiced = lead.invoiceEvents.reduce((s, e) => s + e.amount, 0) + amt;
+  const newStage = totalInvoiced >= lead.value ? "Faturado Total" : "Carteira";
+  await prisma.lead.update({ where: { id: lead.id }, data: { stage: newStage } });
+
+  res.json({ ok: true, stage: newStage, totalInvoiced });
 });
 
 // -------- Notas / histórico do lead --------
@@ -107,3 +142,4 @@ router.post("/:id/notes", async (req, res) => {
 });
 
 export default router;
+

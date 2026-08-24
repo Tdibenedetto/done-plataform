@@ -70,4 +70,6 @@ Object.assign(api, {
   inviteAccept: (token, data) => request(`/auth/invite/${token}/accept`, { method: "POST", body: data }),
   leadNotesList: (id) => request(`/leads/${id}/notes`),
   leadNoteAdd: (id, content) => request(`/leads/${id}/notes`, { method: "POST", body: { content } }),
+  leadInvoice: (id, amount) => request(`/leads/${id}/invoice`, { method: "POST", body: { amount } }),
 });
+
