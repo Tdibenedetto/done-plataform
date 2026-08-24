@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Upload, X, List, Target, Lightbulb } from "lucide-react";
+import { Upload, X, List, Target, Lightbulb, Link2 } from "lucide-react";
 import { C, S } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
 
@@ -22,15 +22,17 @@ export default function FerramentaGestao() {
   const isMaster = loadSession()?.user?.role === "master";
   const [data, setData] = useState(null); // null=loading; { uploads, rows }
   const [goals, setGoals] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [showSkus, setShowSkus] = useState(false);
   const [mapNotice, setMapNotice] = useState(null);
 
   async function reload() {
-    const [all, gs] = await Promise.all([api.gestaoAll(), api.gestaoGoals()]);
+    const [all, gs, ls] = await Promise.all([api.gestaoAll(), api.gestaoGoals(), api.leadsList()]);
     setData(all);
     setGoals(gs);
+    setLeads(ls);
   }
   useEffect(() => { reload(); }, []);
 
@@ -159,6 +161,28 @@ export default function FerramentaGestao() {
   }
 
   const overallAvgMargin = rows.length ? rows.reduce((s, r) => s + r.margem, 0) / rows.length : 0;
+
+  // -------- Visão cruzada: vendas fechadas (Ferramenta de Vendas) x margem por categoria (Ferramenta de Gestão) --------
+  const closedLeads = leads.filter((l) => l.stage === "Fechado" && l.categoria);
+  const marginByCategoria = {};
+  catData.forEach((c) => { marginByCategoria[c.categoria] = c.margem; });
+
+  const bySeller = {};
+  closedLeads.forEach((l) => {
+    const seller = l.assignedUser?.name || "Sem vendedor";
+    if (!bySeller[seller]) bySeller[seller] = { total: 0, weightedMargin: 0, knownMarginTotal: 0 };
+    bySeller[seller].total += l.value;
+    const margin = marginByCategoria[l.categoria];
+    if (margin !== undefined) {
+      bySeller[seller].weightedMargin += l.value * margin;
+      bySeller[seller].knownMarginTotal += l.value;
+    }
+  });
+  const sellerCross = Object.entries(bySeller).map(([seller, d]) => ({
+    seller,
+    total: d.total,
+    avgMargin: d.knownMarginTotal ? Math.round(d.weightedMargin / d.knownMarginTotal) : null,
+  })).sort((a, b) => b.total - a.total);
 
   const insights = [];
   alerts.forEach((a) => {
@@ -292,6 +316,34 @@ export default function FerramentaGestao() {
               <span>{ins.text}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {sellerCross.length > 0 && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14.5, marginBottom: 4 }}>
+            <Link2 size={15} color={C.gold} /> Vendas x Margem por vendedor
+          </div>
+          <p style={{ fontSize: 11.5, color: C.muted, margin: "0 0 14px" }}>
+            Cruza os negócios fechados na Ferramenta de Vendas (por categoria) com a margem real dessa categoria nesta planilha.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {sellerCross.map((s) => {
+              const belowAvg = s.avgMargin !== null && overallAvgMargin > 0 && s.avgMargin < overallAvgMargin - 5;
+              return (
+                <div key={s.seller} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600 }}>{s.seller}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{fmtBRL(s.total)} fechados em categorias com margem cruzada</div>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: belowAvg ? C.danger : C.sage, fontFamily: "'Space Grotesk',sans-serif" }}>
+                    {s.avgMargin === null ? "—" : `${s.avgMargin}% margem méd.`}
+                    {belowAvg && <div style={{ fontSize: 10, fontWeight: 400, color: C.muted }}>abaixo da média geral</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
