@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from "react";
 import {
   Activity, Trello, BarChart2, LayoutGrid, Eye, EyeOff,
-  ShieldCheck, Menu, X, Zap,
+  ShieldCheck, Menu, X,
 } from "lucide-react";
 import { C, S, FONT_DISPLAY, FONT_IMPORT, RESPONSIVE_CSS } from "./theme.js";
 import { api, saveSession, loadSession, clearSession } from "./lib/api.js";
 import ComercialCoach from "./modules/ComercialCoach.jsx";
 import FerramentaVendas from "./modules/Vendas.jsx";
 import FerramentaGestao from "./modules/Gestao.jsx";
-
-const DIMENSION_LABEL = { processo: "Processo", preco: "Preço", time: "Time", pipeline: "Pipeline" };
+import VisaoGeral from "./modules/VisaoGeral.jsx";
 
 export default function App() {
   const [session, setSession] = useState(() => loadSession());
@@ -66,60 +65,6 @@ export default function App() {
         {activeModule === "gestao" && <FerramentaGestao />}
       </div>
     </div>
-  );
-}
-
-// Placeholder da nova página inicial — a versão completa (com performance, alertas
-// e atividade do time) chega na próxima fase do redesenho.
-function VisaoGeral({ coachResult, goTo }) {
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
-  const session = loadSession();
-  const firstName = session?.user?.name?.split(" ")[0] || "";
-
-  return (
-    <div style={S.moduleCol}>
-      <div>
-        <h1 style={{ ...S.h1, fontSize: 30 }}>{greeting}, {firstName}.</h1>
-        <p style={S.lead}>Aqui está o que merece sua atenção hoje.</p>
-      </div>
-
-      {coachResult && (
-        <div style={{ background: C.goldSoft, borderRadius: 14, padding: 20, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <div style={{ width: 44, height: 44, borderRadius: "50%", background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <Zap size={20} color="#fff" />
-          </div>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.gold, letterSpacing: "0.06em" }}>SEU PRÓXIMO MOVIMENTO</div>
-            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16, color: C.ink, marginTop: 2 }}>
-              Sua nota mais baixa é em {DIMENSION_LABEL[Object.entries(coachResult.dims || {
-                processo: coachResult.dimProcesso, preco: coachResult.dimPreco, time: coachResult.dimTime, pipeline: coachResult.dimPipeline,
-              }).sort((a, b) => a[1] - b[1])[0][0]]}.
-            </div>
-          </div>
-          <button style={S.primaryBtnSm} onClick={() => goTo("coach")}>Ver diagnóstico →</button>
-        </div>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-        <ModuleCard icon={Activity} color={C.gold} title="Comercial Coach" desc="Diagnóstico e plano de ação para evoluir sua operação." onClick={() => goTo("coach")} />
-        <ModuleCard icon={Trello} color={C.sage} title="Ferramenta de Vendas" desc="Gerencie seu funil, faturamento e o time comercial." onClick={() => goTo("vendas")} />
-        <ModuleCard icon={BarChart2} color={C.ink} title="Ferramenta de Gestão" desc="Margem, metas, estoque e indicadores do negócio." onClick={() => goTo("gestao")} />
-      </div>
-    </div>
-  );
-}
-
-function ModuleCard({ icon: Icon, color, title, desc, onClick }) {
-  return (
-    <button onClick={onClick} style={{ textAlign: "left", background: C.card, border: `1px solid ${C.border}`, borderTop: `3px solid ${color}`, borderRadius: 12, padding: 20, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ width: 40, height: 40, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <Icon size={18} color="#fff" />
-      </div>
-      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 16, color: C.ink }}>{title}</div>
-      <div style={{ fontSize: 12.5, color: C.inkSoft, lineHeight: 1.5 }}>{desc}</div>
-      <div style={{ fontSize: 12.5, fontWeight: 600, color, marginTop: 4 }}>Acessar módulo →</div>
-    </button>
   );
 }
 
