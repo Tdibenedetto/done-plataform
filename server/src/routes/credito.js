@@ -54,7 +54,9 @@ router.post("/cnpj", async (req, res) => {
 
   let data;
   try {
-    const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${clean}`);
+    const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${clean}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; DONE-Platform/1.0)", "Accept": "application/json" },
+    });
     if (resp.status === 404) {
       return res.status(404).json({ error: "Esse CNPJ não foi encontrado na base da Receita Federal — confira se está correto." });
     }
