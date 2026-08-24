@@ -20,6 +20,7 @@ model Organization {
   coachResults  CoachResult[]
   gestaoUploads GestaoUpload[]
   revenueGoals  RevenueGoal[]
+  creditAnalyses CreditAnalysis[]
   subscriptions Subscription[]
   payments      Payment[]
 }
@@ -37,6 +38,7 @@ model User {
   assignedLeads Lead[]
   goals         Goal[]
   leadNotes     LeadNote[]
+  creditAnalyses CreditAnalysis[]
 
   @@index([organizationId])
 }
@@ -146,6 +148,36 @@ model RevenueGoal {
   target         Float        @default(0)
 
   @@unique([organizationId, month])
+  @@index([organizationId])
+}
+
+model CreditAnalysis {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedById  String
+  requestedBy    User         @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+
+  cnpj         String
+  companyName  String?
+  situacao     String?
+  dataAbertura DateTime?
+  atividade    String?
+
+  hasFinancials     Boolean @default(false)
+  receita           Float?
+  lucroLiquido      Float?
+  ativoCirculante   Float?
+  passivoCirculante Float?
+  ativoTotal        Float?
+  passivoTotal      Float?
+
+  status         String? // "aprovado" | "reprovado"
+  limiteSugerido Float?
+  motivoRecusa   String?
+
+  createdAt DateTime @default(now())
+
   @@index([organizationId])
 }
 

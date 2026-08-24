@@ -97,3 +97,47 @@ export function normalizeEstoque(raw) {
   if (/(excess|sobra|alto|encalh)/.test(val)) return "excesso";
   return "ok";
 }
+
+/**
+ * Recebe um PDF de balanço/DRE em base64 e devolve os números principais
+ * extraídos pela IA, ou null se não conseguir ler.
+ */
+export async function extractFinancials(pdfBase64) {
+  if (!client) return null;
+
+  const prompt = `Você extrai números financeiros de um balanço patrimonial e/ou DRE (Demonstração de Resultado).
+
+Encontre e retorne, em reais (número, sem formatação, sem R$, sem separador de milhar):
+- receita: receita/faturamento total do período
+- lucroLiquido: lucro líquido do período (pode ser negativo)
+- ativoCirculante: total do ativo circulante
+- passivoCirculante: total do passivo circulante
+- ativoTotal: total do ativo
+- passivoTotal: total do passivo (ou passivo total = ativo total - patrimônio líquido, se só houver patrimônio líquido)
+
+Responda APENAS com um JSON, sem markdown, sem texto antes ou depois:
+{"receita": 0, "lucroLiquido": 0, "ativoCirculante": 0, "passivoCirculante": 0, "ativoTotal": 0, "passivoTotal": 0}
+
+Use null para qualquer valor que não conseguir encontrar no documento. Não invente números.`;
+
+  try {
+    const res = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 500,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
+          { type: "text", text: prompt },
+        ],
+      }],
+    });
+    const text = res.content.find((b) => b.type === "text")?.text || "";
+    const clean = text.replace(/```json|```/g, "").trim();
+    return JSON.parse(clean);
+  } catch (e) {
+    console.error("[claude] falha ao extrair balanço:", e.message);
+    return null;
+  }
+}
+

@@ -71,5 +71,12 @@ Object.assign(api, {
   leadNotesList: (id) => request(`/leads/${id}/notes`),
   leadNoteAdd: (id, content) => request(`/leads/${id}/notes`, { method: "POST", body: { content } }),
   leadInvoice: (id, amount) => request(`/leads/${id}/invoice`, { method: "POST", body: { amount } }),
+  creditoList: () => request("/credito"),
+  creditoCnpj: (cnpj) => request("/credito/cnpj", { method: "POST", body: { cnpj } }),
+  creditoBalanco: (id, file) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request(`/credito/${id}/balanco`, { method: "POST", body: form, isForm: true });
+  },
 });
 
