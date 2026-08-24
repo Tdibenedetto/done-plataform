@@ -283,15 +283,15 @@ function MiniRadar({ coachResult }) {
 function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen, onCloseMobile }) {
   const isMaster = profile.role === "master";
   const items = [
-    { key: "overview", label: "Vis\u00e3o Geral", icon: LayoutGrid },
+    { key: "overview", label: "Visão Geral", icon: LayoutGrid },
     { key: "coach", label: "Comercial Coach", icon: Activity },
     { key: "vendas", label: "Ferramenta de Vendas", icon: Trello },
-    ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gest\u00e3o", icon: BarChart2 }] : []),
+    ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gestão", icon: BarChart2 }] : []),
   ];
 
   const dims = coachResult ? [
     { key: "processo", label: "Processo", v: coachResult.dimProcesso },
-    { key: "preco", label: "Pre\u00e7o", v: coachResult.dimPreco },
+    { key: "preco", label: "Preço", v: coachResult.dimPreco },
     { key: "time", label: "Time", v: coachResult.dimTime },
     { key: "pipeline", label: "Pipeline", v: coachResult.dimPipeline },
   ] : [];
@@ -307,7 +307,7 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
         <button onClick={onCloseMobile} style={{ display: mobileOpen ? "flex" : "none", background: "none", border: "none", color: "#C7CAD4", cursor: "pointer" }}><X size={18} /></button>
       </div>
 
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: C.gold, padding: "20px 10px 8px" }}>NAVEGA\u00c7\u00c3O</div>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: C.gold, padding: "20px 10px 8px" }}>NAVEGAÇÃO</div>
       <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {items.map((it) => {
           const Icon = it.icon;
@@ -327,7 +327,7 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
 
       {coachResult && (
         <>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: C.gold, padding: "22px 10px 10px" }}>INTELIG\u00caNCIA</div>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: C.gold, padding: "22px 10px 10px" }}>INTELIGÊNCIA</div>
           <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: 14 }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: C.gold }}>NOTA COMERCIAL</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 6 }}>
@@ -345,7 +345,7 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
               <span style={{ flex: 1 }}>
                 <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", color: "#6E7484" }}>FOCO DA SEMANA</div>
                 <div style={{ fontSize: 12.5, color: "#fff", fontWeight: 600, marginTop: 2 }}>{weakest.label}</div>
-                <div style={{ fontSize: 10.5, color: "#6E7484" }}>nota {Math.round(weakest.v)} \u2014 sua prioridade agora</div>
+                <div style={{ fontSize: 10.5, color: "#6E7484" }}>nota {Math.round(weakest.v)} — sua prioridade agora</div>
               </span>
               <ChevronRight size={14} color="#6E7484" />
             </button>
