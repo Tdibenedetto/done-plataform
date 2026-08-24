@@ -23,7 +23,7 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, value, assignedUserId, expectedCloseDate } = req.body;
+  const { name, value, assignedUserId, expectedCloseDate, categoria } = req.body;
   if (!name) return res.status(400).json({ error: "Nome do lead é obrigatório." });
 
   // Membro só cria lead para si mesmo; Master pode atribuir a qualquer um do time.
@@ -41,6 +41,7 @@ router.post("/", async (req, res) => {
       name,
       value: Number(value) || 0,
       expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null,
+      categoria: categoria || null,
     },
     include: { assignedUser: { select: { id: true, name: true } }, _count: { select: { notes: true } } },
   });
@@ -48,7 +49,7 @@ router.post("/", async (req, res) => {
 });
 
 router.patch("/:id", async (req, res) => {
-  const { stage, lostReason, expectedCloseDate } = req.body;
+  const { stage, lostReason, expectedCloseDate, categoria } = req.body;
   if (stage && !STAGES.includes(stage)) return res.status(400).json({ error: "Etapa inválida." });
 
   const existing = await prisma.lead.findFirst({ where: leadWhere(req, req.params.id) });
@@ -58,6 +59,7 @@ router.patch("/:id", async (req, res) => {
   if (stage) data.stage = stage;
   if (lostReason !== undefined) data.lostReason = lostReason;
   if (expectedCloseDate !== undefined) data.expectedCloseDate = expectedCloseDate ? new Date(expectedCloseDate) : null;
+  if (categoria !== undefined) data.categoria = categoria || null;
 
   await prisma.lead.update({ where: { id: existing.id }, data });
 
