@@ -163,24 +163,48 @@ function AuthScreen({ onAuth }) {
 }
 
 function RadialGraphic() {
+  const cx = 200, cy = 200;
+  const rings = [50, 90, 130, 170];
+  // Cone de varredura do radar — uma cunha de luz suave, não um traço grosso.
+  const sweepAngle = 34; // largura do feixe, em graus
+  const sweepDir = -55; // direção do feixe (graus, 0 = direita, sentido horário)
+  const a1 = ((sweepDir - sweepAngle / 2) * Math.PI) / 180;
+  const a2 = ((sweepDir + sweepAngle / 2) * Math.PI) / 180;
+  const sweepR = 260;
+  const x1 = cx + sweepR * Math.cos(a1), y1 = cy + sweepR * Math.sin(a1);
+  const x2 = cx + sweepR * Math.cos(a2), y2 = cy + sweepR * Math.sin(a2);
+
+  // Pequenas estrelas espalhadas, com posições fixas (determinísticas, sem Math.random no render).
+  const stars = [
+    [70, 60, 1.4], [330, 90, 1.1], [40, 260, 1.2], [360, 300, 1.6],
+    [90, 340, 1], [300, 45, 1.3], [20, 150, 1], [370, 190, 1.2],
+  ];
+
   return (
-    <svg viewBox="0 0 400 260" style={{ position: "absolute", right: -40, top: "50%", transform: "translateY(-50%)", width: 420, opacity: 0.9, zIndex: 1 }}>
+    <svg viewBox="0 0 400 400" style={{ width: "100%", maxWidth: 340, margin: "0 auto", display: "block", opacity: 0.95 }}>
       <defs>
         <radialGradient id="doneGlow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={C.gold} stopOpacity="0.9" />
+          <stop offset="0%" stopColor={C.gold} stopOpacity="1" />
           <stop offset="100%" stopColor={C.gold} stopOpacity="0" />
         </radialGradient>
-        <linearGradient id="doneBeam" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id="doneSweep" x1={cx} y1={cy} x2={x2} y2={y2} gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor={C.gold} stopOpacity="0.5" />
           <stop offset="100%" stopColor={C.gold} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <line x1="230" y1="130" x2="400" y2="230" stroke="url(#doneBeam)" strokeWidth="60" strokeLinecap="round" />
-      {[100, 75, 50, 25].map((r) => (
-        <circle key={r} cx="230" cy="130" r={r} fill="none" stroke={C.gold} strokeOpacity="0.25" strokeWidth="1" />
+
+      <path d={`M ${cx} ${cy} L ${x1} ${y1} A ${sweepR} ${sweepR} 0 0 1 ${x2} ${y2} Z`} fill="url(#doneSweep)" />
+
+      {rings.map((r) => (
+        <circle key={r} cx={cx} cy={cy} r={r} fill="none" stroke={C.gold} strokeOpacity="0.22" strokeWidth="1" />
       ))}
-      <circle cx="230" cy="130" r="20" fill="url(#doneGlow)" />
-      <circle cx="230" cy="130" r="5" fill={C.gold} />
+
+      {stars.map(([sx, sy, r], i) => (
+        <circle key={i} cx={sx} cy={sy} r={r} fill={C.gold} fillOpacity="0.5" />
+      ))}
+
+      <circle cx={cx} cy={cy} r="26" fill="url(#doneGlow)" />
+      <circle cx={cx} cy={cy} r="4.5" fill={C.gold} />
     </svg>
   );
 }
