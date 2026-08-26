@@ -9,6 +9,8 @@ if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
   console.warn("[twilio] credentials not set — alert sending is disabled until configured.");
 }
 
+export const isTwilioConfigured = !!client;
+
 /**
  * Sends an SMS or WhatsApp alert. Mirrors the pattern used in Iconic Storm Watch:
  * pass `whatsapp:` prefix on both `to` and the configured from-number to send via WhatsApp.

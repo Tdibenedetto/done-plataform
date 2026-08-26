@@ -747,7 +747,11 @@ function TeamPanel({ team, isMaster, onChange }) {
     setTestMsg(null);
     try {
       const r = await api.teamFollowupTest();
-      setTestMsg(`Checagem rodou: ${r.totalSent} lembrete(s) enviado(s), ${r.orgsChecked} organização(ões) com plano ativo verificada(s).`);
+      if (!r.twilioConfigured) {
+        setTestMsg("⚠️ O Twilio ainda não está configurado no servidor — nenhuma mensagem foi enviada de verdade. Configure as credenciais no Render e teste de novo.");
+      } else {
+        setTestMsg(`Checagem rodou: ${r.totalSent} lembrete(s) enviado(s), ${r.orgsChecked} organização(ões) com plano ativo verificada(s).`);
+      }
     } catch (e) {
       setTestMsg(e.message);
     } finally {

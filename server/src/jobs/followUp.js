@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { prisma } from "../lib/prisma.js";
-import { sendAlert } from "../lib/twilio.js";
+import { sendAlert, isTwilioConfigured } from "../lib/twilio.js";
 
 const MONTHLY_CAP_PER_ORG = 60; // teto de envios automáticos por organização/mês, para não sangrar o crédito Twilio
 const STALLED_STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação"]; // etapas que ainda estão "em jogo"
@@ -63,7 +63,11 @@ export async function runFollowUpCheck(options = {}) {
 
       const body = `D.O.N.E — Lembrete de follow-up\n"${lead.name}" (${lead.stage}) está parado há ${org.followUpDays}+ dias. Hora de retomar o contato.`;
       try {
-        await sendAlert(lead.assignedUser.phone, body);
+        const result = await sendAlert(lead.assignedUser.phone, body);
+        if (result?.skipped) {
+          console.warn(`[followup] Twilio não configurado — lembrete para o lead ${lead.id} (${org.name}) NÃO foi enviado de verdade.`);
+          continue; // não conta como enviado, não cria registro, não bloqueia retentativa depois
+        }
         await prisma.followUpAlert.create({
           data: { organizationId: org.id, leadId: lead.id, sentTo: lead.assignedUser.phone },
         });
@@ -76,7 +80,7 @@ export async function runFollowUpCheck(options = {}) {
   }
 
   console.log(`[followup] verificação concluída — ${totalSent} lembrete(s) enviado(s) em ${orgs.length} organização(ões) verificada(s).`);
-  return { totalSent, orgsChecked: orgs.length };
+  return { totalSent, orgsChecked: orgs.length, twilioConfigured: isTwilioConfigured };
 }
 
 // Permite continuar rodando como script standalone (ex: se um dia migrar para um Cron Job de verdade).
