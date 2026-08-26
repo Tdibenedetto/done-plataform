@@ -88,6 +88,7 @@ export default function ChatWidget() {
 
   const showEscalate = thread && thread.status !== "escalated" && thread.status !== "resolved";
   const displayMessages = messages.length ? messages : [GREETING];
+  const hasSupportReply = messages.some((m) => m.role === "support");
 
   return (
     <>
@@ -117,9 +118,9 @@ export default function ChatWidget() {
         }}>
           <div style={{ background: C.ink, color: "#fff", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
             <div>
-              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14.5 }}>Suporte D.O.N.E</div>
+              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14.5 }}>{hasSupportReply ? "Moana" : "Suporte D.O.N.E"}</div>
               <div style={{ fontSize: 10.5, color: "#8A8F9C" }}>
-                {thread?.status === "escalated" ? "Falando com o suporte" : "Assistente automático"}
+                {hasSupportReply ? "Time de suporte" : thread?.status === "escalated" ? "Aguardando o time de suporte" : "Assistente automático"}
               </div>
             </div>
             <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "#C7CAD4", cursor: "pointer", display: "flex" }}><X size={18} /></button>
@@ -139,7 +140,7 @@ export default function ChatWidget() {
                 background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px",
                 fontSize: 12, color: C.inkSoft, cursor: "pointer", fontFamily: "Inter",
               }}>
-                <UserRound size={13} /> Falar com um humano
+                <UserRound size={13} /> Falar com alguém do time de suporte
               </button>
             </div>
           )}
@@ -168,6 +169,14 @@ export default function ChatWidget() {
 function ChatBubble({ role, content, muted }) {
   const isUser = role === "user";
   const isSupport = role === "support";
+  const isSystem = role === "system";
+
+  if (isSystem) {
+    return (
+      <div style={{ textAlign: "center", fontSize: 11.5, color: C.muted, padding: "2px 10px" }}>{content}</div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
       <div style={{
@@ -178,7 +187,7 @@ function ChatBubble({ role, content, muted }) {
         fontStyle: muted ? "italic" : "normal",
         overflowWrap: "break-word", wordBreak: "break-word",
       }}>
-        {isSupport && <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", color: C.gold, marginBottom: 3 }}>SUPORTE</div>}
+        {isSupport && <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.05em", color: C.gold, marginBottom: 3 }}>MOANA</div>}
         {content}
       </div>
     </div>

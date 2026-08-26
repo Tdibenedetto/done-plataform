@@ -65,7 +65,7 @@ export default function Suporte() {
     <div style={S.moduleCol}>
       <div>
         <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, margin: 0 }}>Suporte</h2>
-        <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>Conversas do chat da plataforma que pediram para falar com um humano.</p>
+        <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>Conversas do chat da plataforma que pediram para falar com alguém do time de suporte.</p>
       </div>
 
       {open.length === 0 && resolved.length === 0 && (

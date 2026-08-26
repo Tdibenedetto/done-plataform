@@ -108,7 +108,7 @@ Sobre a plataforma:
 - Contas: cada assinatura dá direito a 3 usuários (1 Master + 2 adicionais). O Master convida vendedores por e-mail, define metas e vê o pipeline de todos; vendedores adicionais só veem/gerenciam seus próprios leads. Só o Master acessa a Ferramenta de Gestão e a Análise de Crédito completa.
 - Planos: Vendas, Gestão e Completo, cobrados via Stripe; o Comercial Coach completo é cobrado à parte mesmo no plano Completo.
 
-Responda em português, de forma direta e curta (2 a 4 frases na maioria dos casos), como um atendente de suporte experiente do produto — sem inventar recursos que não existem. Se a dúvida for sobre algo fora da plataforma (preços não confirmados, bugs específicos da conta do usuário, pedidos de reembolso, ou qualquer coisa que você não tem certeza) diga claramente que não tem essa informação e sugira falar com o suporte humano usando o botão "Falar com um humano" desta mesma conversa.`;
+Responda em português, de forma direta e curta (2 a 4 frases na maioria dos casos), como um atendente de suporte experiente do produto — sem inventar recursos que não existem. Se a dúvida for sobre algo fora da plataforma (preços não confirmados, bugs específicos da conta do usuário, pedidos de reembolso, ou qualquer coisa que você não tem certeza) diga claramente que não tem essa informação e sugira usar o botão "Falar com alguém do time de suporte" desta mesma conversa.`;
 
 /**
  * Responde a uma dúvida de usuário dentro do chat de suporte da plataforma,
@@ -116,7 +116,7 @@ Responda em português, de forma direta e curta (2 a 4 frases na maioria dos cas
  */
 export async function chatReply(history) {
   if (!client) {
-    return "O suporte por IA não está configurado no momento. Toque em \"Falar com um humano\" que alguém do time vai te responder por aqui.";
+    return "O suporte por IA não está configurado no momento. Toque em \"Falar com alguém do time de suporte\" que alguém vai te responder por aqui.";
   }
   try {
     const res = await client.messages.create({
@@ -125,10 +125,10 @@ export async function chatReply(history) {
       system: PLATFORM_KNOWLEDGE,
       messages: history.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
     });
-    return res.content.find((b) => b.type === "text")?.text?.trim() || "Não consegui gerar uma resposta agora. Tente de novo ou fale com um humano.";
+    return res.content.find((b) => b.type === "text")?.text?.trim() || "Não consegui gerar uma resposta agora. Tente de novo ou fale com o time de suporte.";
   } catch (e) {
     console.error("[claude] falha no chat de suporte:", e.message);
-    return "Tive um problema para responder agora. Tente de novo em instantes, ou toque em \"Falar com um humano\".";
+    return "Tive um problema para responder agora. Tente de novo em instantes, ou toque em \"Falar com alguém do time de suporte\".";
   }
 }
 export async function extractFinancials(pdfBase64) {

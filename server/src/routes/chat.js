@@ -32,7 +32,7 @@ router.post("/message", async (req, res) => {
   const thread = await getOrCreateThread(req.userId, req.organizationId);
   await prisma.chatMessage.create({ data: { threadId: thread.id, role: "user", content: content.trim() } });
 
-  // Se já foi escalado para humano, a IA não responde mais — fica só aguardando o suporte.
+  // Se já foi escalado, a IA não responde mais — fica só aguardando o time de suporte.
   if (thread.status === "escalated") {
     await prisma.supportThread.update({ where: { id: thread.id }, data: { updatedAt: new Date() } });
     const messages = await prisma.chatMessage.findMany({ where: { threadId: thread.id }, orderBy: { createdAt: "asc" } });
@@ -55,11 +55,11 @@ router.post("/escalate", async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.userId } });
   const org = await prisma.organization.findUnique({ where: { id: req.organizationId } });
   await prisma.chatMessage.create({
-    data: { threadId: thread.id, role: "support", content: "Um humano do suporte foi avisado e vai responder por aqui em breve." },
+    data: { threadId: thread.id, role: "system", content: "Um integrante do nosso time de suporte foi avisado e vai te responder por aqui em breve." },
   });
 
   if (process.env.SUPPORT_ALERT_PHONE) {
-    const body = `D.O.N.E — Suporte\n${user?.name || "Um usuário"} (${org?.name || "org"}) pediu para falar com um humano no chat da plataforma.`;
+    const body = `D.O.N.E — Suporte\n${user?.name || "Um usuário"} (${org?.name || "org"}) pediu para falar com alguém do time de suporte no chat da plataforma.`;
     sendAlert(process.env.SUPPORT_ALERT_PHONE, body).catch((e) => console.error("[chat] falha ao alertar suporte:", e.message));
   }
 
