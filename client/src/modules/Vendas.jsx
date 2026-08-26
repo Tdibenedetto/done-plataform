@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Plus, Trash2, UserPlus, X, Mail, MessageSquare, Calendar, Filter, TrendingUp, DollarSign, Briefcase, Phone } from "lucide-react";
+import { Plus, Trash2, UserPlus, X, Mail, MessageSquare, Calendar, Filter, TrendingUp, DollarSign, Briefcase, Phone, LineChart as LineChartIcon } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
 
@@ -29,6 +29,7 @@ export default function FerramentaVendas() {
   const [showMetrics, setShowMetrics] = useState(false);
   const [showAnnual, setShowAnnual] = useState(false);
   const [showCarteira, setShowCarteira] = useState(false);
+  const [showForecast, setShowForecast] = useState(false);
   const [draft, setDraft] = useState({ name: "", value: "", assignedUserId: "", expectedCloseDate: "", categoria: "" });
   const [lostFor, setLostFor] = useState(null);
   const [lostReason, setLostReason] = useState("");
@@ -139,6 +140,7 @@ export default function FerramentaVendas() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button style={S.ghostBtn} onClick={() => setShowForecast((s) => !s)}><LineChartIcon size={14} /> Forecast</button>
           <button style={S.ghostBtn} onClick={() => setShowCarteira((s) => !s)}><Briefcase size={14} /> Carteira</button>
           <button style={S.ghostBtn} onClick={() => setShowAnnual((s) => !s)}><Calendar size={14} /> Meta anual</button>
           <button style={S.ghostBtn} onClick={() => setShowMetrics((s) => !s)}><TrendingUp size={14} /> Métricas</button>
@@ -147,6 +149,7 @@ export default function FerramentaVendas() {
       </div>
 
       {showTeam && <TeamPanel team={team} isMaster={isMaster} onChange={reload} />}
+      {showForecast && <ForecastPanel leads={leads} />}
       {showMetrics && <MetricsPanel leads={leads} />}
       {showAnnual && <AnnualGoalsPanel team={team} goals={goals} leads={leads} isMaster={isMaster} onChange={reload} />}
       {showCarteira && <CarteiraPanel team={team} leads={leads} isMaster={isMaster} />}
@@ -485,6 +488,115 @@ function LeadDetailModal({ lead, onClose }) {
           <button style={S.primaryBtnSm} disabled={busy} onClick={addNote}>Adicionar</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Probabilidade de fechamento por etapa — usada para ponderar o valor do pipeline no forecast.
+const STAGE_WEIGHT = { "Novo Lead": 0.10, "Qualificação": 0.25, "Proposta": 0.50, "Negociação": 0.75 };
+const FORECAST_HORIZON_MONTHS = 6;
+
+function ForecastPanel({ leads }) {
+  const [history, setHistory] = useState(null);
+
+  useEffect(() => {
+    api.gestaoAll().then((r) => setHistory(r.rows)).catch(() => setHistory([]));
+  }, []);
+
+  const data = useMemo(() => {
+    const open = leads.filter((l) => STAGE_WEIGHT[l.stage] !== undefined);
+
+    const now = new Date();
+    const months = Array.from({ length: FORECAST_HORIZON_MONTHS }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: MONTHS_PT[d.getMonth()], monthIndex: d.getMonth() };
+    });
+
+    const byMonth = Object.fromEntries(months.map((m) => [m.key, { weighted: 0, raw: 0, count: 0 }]));
+    let noDate = { weighted: 0, raw: 0, count: 0 };
+    let totalWeighted = 0, totalRaw = 0;
+
+    open.forEach((l) => {
+      const weight = STAGE_WEIGHT[l.stage];
+      const weighted = l.value * weight;
+      totalWeighted += weighted;
+      totalRaw += l.value;
+
+      if (!l.expectedCloseDate) {
+        noDate.weighted += weighted; noDate.raw += l.value; noDate.count += 1;
+        return;
+      }
+      const key = l.expectedCloseDate.slice(0, 7);
+      if (byMonth[key]) {
+        byMonth[key].weighted += weighted; byMonth[key].raw += l.value; byMonth[key].count += 1;
+      }
+    });
+
+    // Média histórica dos últimos meses com faturamento real na Gestão (referência, não é o forecast em si).
+    const histByMonth = {};
+    (history || []).forEach((r) => { histByMonth[r.mes] = (histByMonth[r.mes] || 0) + r.valor; });
+    const recentHistory = MONTHS_PT
+      .map((label) => histByMonth[label])
+      .filter((v) => v !== undefined);
+    const avgHistorical = recentHistory.length ? recentHistory.reduce((a, b) => a + b, 0) / recentHistory.length : null;
+
+    const chart = months.map((m) => ({
+      mes: m.label,
+      Ponderado: Math.round(byMonth[m.key].weighted),
+      leads: byMonth[m.key].count,
+    }));
+
+    return { chart, months, byMonth, noDate, totalWeighted, totalRaw, avgHistorical };
+  }, [leads, history]);
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5 }}>Forecast de vendas</div>
+        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+          Pipeline aberto ponderado pela probabilidade de cada etapa (Novo Lead 10%, Qualificação 25%, Proposta 50%, Negociação 75%), por mês de fechamento previsto.
+        </div>
+      </div>
+
+      <div className="done-metrics-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+        <div style={{ background: C.paper, borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 11, color: C.muted }}>Pipeline ponderado (aberto)</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19, color: C.gold }}>{fmtBRL(data.totalWeighted)}</div>
+          <div style={{ fontSize: 10.5, color: C.muted }}>de {fmtBRL(data.totalRaw)} em aberto (valor cheio)</div>
+        </div>
+        <div style={{ background: C.paper, borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 11, color: C.muted }}>Sem data prevista</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19, color: data.noDate.count ? C.danger : C.sage }}>
+            {data.noDate.count} {data.noDate.count === 1 ? "lead" : "leads"}
+          </div>
+          <div style={{ fontSize: 10.5, color: C.muted }}>{fmtBRL(data.noDate.weighted)} ponderado fora do gráfico</div>
+        </div>
+        <div style={{ background: C.paper, borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 11, color: C.muted }}>Média histórica mensal (Gestão)</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 19, color: C.ink }}>
+            {data.avgHistorical === null ? "—" : fmtBRL(data.avgHistorical)}
+          </div>
+          <div style={{ fontSize: 10.5, color: C.muted }}>{data.avgHistorical === null ? "sem dados de faturamento ainda" : "referência de faturamento realizado"}</div>
+        </div>
+      </div>
+
+      <div style={{ height: 220 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data.chart}>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+            <XAxis dataKey="mes" tick={{ fontSize: 11, fill: C.muted }} axisLine={{ stroke: C.border }} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: C.muted }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+            <Tooltip formatter={(v) => fmtBRL(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}` }} />
+            <Bar dataKey="Ponderado" fill={C.gold} radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {data.noDate.count > 0 && (
+        <div style={{ fontSize: 11.5, color: C.inkSoft, background: C.goldSoft, borderRadius: 8, padding: "8px 12px" }}>
+          {data.noDate.count} {data.noDate.count === 1 ? "lead não tem" : "leads não têm"} data de fechamento prevista e por isso {data.noDate.count === 1 ? "não entra" : "não entram"} no gráfico mensal — {fmtBRL(data.noDate.weighted)} ponderados de fora. Preencher a data no card do lead deixa o forecast mais preciso.
+        </div>
+      )}
     </div>
   );
 }
