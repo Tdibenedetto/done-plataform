@@ -57,8 +57,11 @@ router.post("/", async (req, res) => {
 });
 
 router.patch("/:id", async (req, res) => {
-  const { stage, lostReason, expectedCloseDate, categoria, margemReal } = req.body;
+  const { stage, lostReason, expectedCloseDate, categoria, margemReal, value } = req.body;
   if (stage && !STAGES.includes(stage)) return res.status(400).json({ error: "Etapa inválida." });
+  if (value !== undefined && (isNaN(Number(value)) || Number(value) < 0)) {
+    return res.status(400).json({ error: "Valor inválido." });
+  }
 
   const existing = await prisma.lead.findFirst({ where: leadWhere(req, req.params.id) });
   if (!existing) return res.status(404).json({ error: "Lead não encontrado." });
@@ -69,6 +72,7 @@ router.patch("/:id", async (req, res) => {
   if (expectedCloseDate !== undefined) data.expectedCloseDate = expectedCloseDate ? new Date(expectedCloseDate) : null;
   if (categoria !== undefined) data.categoria = categoria || null;
   if (margemReal !== undefined) data.margemReal = margemReal === null || margemReal === "" ? null : Number(margemReal);
+  if (value !== undefined) data.value = Number(value);
 
   await prisma.lead.update({ where: { id: existing.id }, data });
 

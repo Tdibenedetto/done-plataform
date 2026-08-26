@@ -354,6 +354,8 @@ function LeadDetailModal({ lead, onClose }) {
   const [closeDate, setCloseDate] = useState(lead.expectedCloseDate ? lead.expectedCloseDate.slice(0, 10) : "");
   const [categoria, setCategoria] = useState(lead.categoria || "");
   const [margemReal, setMargemReal] = useState(lead.margemReal ?? "");
+  const [value, setValue] = useState(lead.value ?? "");
+  const [valueMsg, setValueMsg] = useState(null);
 
   const reload = useCallback(async () => {
     setNotes(await api.leadNotesList(lead.id));
@@ -382,6 +384,15 @@ function LeadDetailModal({ lead, onClose }) {
   async function saveMargem() {
     await api.leadUpdate(lead.id, { margemReal: margemReal === "" ? null : margemReal });
   }
+  async function saveValue() {
+    const n = Number(value);
+    if (value === "" || isNaN(n) || n < 0) {
+      setValueMsg("Valor inválido.");
+      return;
+    }
+    setValueMsg(null);
+    await api.leadUpdate(lead.id, { value: n });
+  }
 
   function fmtDate(iso) {
     return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -396,7 +407,7 @@ function LeadDetailModal({ lead, onClose }) {
           <div>
             <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16 }}>{lead.name}</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-              {fmtBRL(lead.value)} · {lead.stage} · {lead.assignedUser?.name || "—"}
+              {lead.stage} · {lead.assignedUser?.name || "—"}
             </div>
             {invoiced > 0 && (
               <div style={{ fontSize: 11.5, color: C.sage, marginTop: 4 }}>Faturado até agora: {fmtBRL(invoiced)}</div>
@@ -404,6 +415,19 @@ function LeadDetailModal({ lead, onClose }) {
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}><X size={18} /></button>
         </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
+          <span style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Valor da negociação</span>
+          <input
+            type="number" min={0} step="0.01"
+            style={{ ...S.input, padding: "6px 10px", fontSize: 12, width: 140 }}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={saveValue}
+          />
+          <span style={{ fontSize: 11, color: C.muted }}>{fmtBRL(Number(value) || 0)}</span>
+        </div>
+        {valueMsg && <div style={{ fontSize: 11, color: C.danger, marginTop: 2 }}>{valueMsg}</div>}
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14 }}>
           <span style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Fechamento previsto</span>
