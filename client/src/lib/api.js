@@ -79,5 +79,12 @@ Object.assign(api, {
     form.append("file", file);
     return request(`/credito/${id}/balanco`, { method: "POST", body: form, isForm: true });
   },
+  chatThread: () => request("/chat/thread"),
+  chatSend: (content) => request("/chat/message", { method: "POST", body: { content } }),
+  chatEscalate: () => request("/chat/escalate", { method: "POST" }),
+  chatThreadsInbox: () => request("/chat/threads"),
+  chatThreadGet: (id) => request(`/chat/threads/${id}`),
+  chatThreadReply: (id, content) => request(`/chat/threads/${id}/reply`, { method: "POST", body: { content } }),
+  chatThreadResolve: (id) => request(`/chat/threads/${id}/resolve`, { method: "POST" }),
 });
 

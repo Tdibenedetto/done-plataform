@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Activity, Trello, BarChart2, LayoutGrid, Eye, EyeOff,
-  ShieldCheck, Menu, X, ChevronRight, CreditCard,
+  ShieldCheck, Menu, X, ChevronRight, CreditCard, LifeBuoy,
 } from "lucide-react";
 import { C, S, FONT_DISPLAY, FONT_IMPORT, RESPONSIVE_CSS } from "./theme.js";
 import { api, saveSession, loadSession, clearSession } from "./lib/api.js";
@@ -10,6 +10,8 @@ import FerramentaVendas from "./modules/Vendas.jsx";
 import FerramentaGestao from "./modules/Gestao.jsx";
 import Credito from "./modules/Credito.jsx";
 import VisaoGeral from "./modules/VisaoGeral.jsx";
+import Suporte from "./modules/Suporte.jsx";
+import ChatWidget from "./components/ChatWidget.jsx";
 
 export default function App() {
   const [session, setSession] = useState(() => loadSession());
@@ -74,7 +76,10 @@ export default function App() {
         {activeModule === "vendas" && <FerramentaVendas />}
         {activeModule === "gestao" && <FerramentaGestao />}
         {activeModule === "credito" && <Credito />}
+        {activeModule === "suporte" && <Suporte />}
       </div>
+
+      <ChatWidget />
     </div>
   );
 }
@@ -323,6 +328,7 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
     { key: "vendas", label: "Ferramenta de Vendas", icon: Trello },
     { key: "credito", label: "Análise de Crédito", icon: CreditCard },
     ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gestão", icon: BarChart2 }] : []),
+    ...(isMaster ? [{ key: "suporte", label: "Suporte", icon: LifeBuoy }] : []),
   ];
 
   const dims = coachResult ? [

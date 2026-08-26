@@ -23,6 +23,7 @@ model Organization {
   creditAnalyses CreditAnalysis[]
   subscriptions Subscription[]
   payments      Payment[]
+  supportThreads SupportThread[]
 }
 
 model User {
@@ -39,6 +40,7 @@ model User {
   goals         Goal[]
   leadNotes     LeadNote[]
   creditAnalyses CreditAnalysis[]
+  supportThreads SupportThread[]
 
   @@index([organizationId])
 }
@@ -205,5 +207,32 @@ model Payment {
   createdAt       DateTime @default(now())
 
   @@index([organizationId])
+}
+
+model SupportThread {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         String       @default("bot") // "bot" | "escalated" | "resolved"
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  messages ChatMessage[]
+
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model ChatMessage {
+  id        String        @id @default(uuid())
+  threadId  String
+  thread    SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role      String   // "user" | "assistant" | "support"
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([threadId])
 }
 

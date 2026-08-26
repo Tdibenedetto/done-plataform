@@ -98,10 +98,39 @@ export function normalizeEstoque(raw) {
   return "ok";
 }
 
+const PLATFORM_KNOWLEDGE = `Você é o assistente de suporte da plataforma D.O.N.E (Commercial Operating System), respondendo dúvidas de usuários dentro do próprio produto.
+
+Sobre a plataforma:
+- Comercial Coach: questionário de diagnóstico comercial (triagem B2B vs Varejo Especializado + 4 dimensões: Processo Comercial, Precificação & Margem, Time & Performance, Pipeline/Estoque) que gera uma Nota Comercial de 0 a 100 e um plano de ação. O relatório resumido é gratuito; a análise completa por dimensão é paga (checkout via Stripe).
+- Ferramenta de Vendas: pipeline Kanban de leads (etapas: Novo Lead, Qualificação, Proposta, Negociação, Fechado, Carteira, Faturado Total, Perdido), metas mensais e anuais por vendedor, notas/histórico por lead, métricas de conversão (taxa, ticket médio, ciclo de venda), e faturamento/carteira por vendedor.
+- Ferramenta de Gestão: upload de planilha de vendas/estoque (aceita qualquer formato — a IA identifica as colunas automaticamente), dashboard de faturamento por mês, margem por categoria, alertas de estoque (ruptura/excesso), drill-down por SKU, e cruzamento de vendas fechadas com margem por vendedor. Exclusiva do usuário Master.
+- Análise de Crédito: consulta básica de CNPJ na Receita Federal (gratuita) e análise avançada com upload de balanço/DRE em PDF, que a IA lê e aplica regras de crédito (liquidez, endividamento, margem) sugerindo limite ou recusa. Não é um birô de crédito oficial.
+- Contas: cada assinatura dá direito a 3 usuários (1 Master + 2 adicionais). O Master convida vendedores por e-mail, define metas e vê o pipeline de todos; vendedores adicionais só veem/gerenciam seus próprios leads. Só o Master acessa a Ferramenta de Gestão e a Análise de Crédito completa.
+- Planos: Vendas, Gestão e Completo, cobrados via Stripe; o Comercial Coach completo é cobrado à parte mesmo no plano Completo.
+
+Responda em português, de forma direta e curta (2 a 4 frases na maioria dos casos), como um atendente de suporte experiente do produto — sem inventar recursos que não existem. Se a dúvida for sobre algo fora da plataforma (preços não confirmados, bugs específicos da conta do usuário, pedidos de reembolso, ou qualquer coisa que você não tem certeza) diga claramente que não tem essa informação e sugira falar com o suporte humano usando o botão "Falar com um humano" desta mesma conversa.`;
+
 /**
- * Recebe um PDF de balanço/DRE em base64 e devolve os números principais
- * extraídos pela IA, ou null se não conseguir ler.
+ * Responde a uma dúvida de usuário dentro do chat de suporte da plataforma,
+ * usando o histórico da conversa como contexto.
  */
+export async function chatReply(history) {
+  if (!client) {
+    return "O suporte por IA não está configurado no momento. Toque em \"Falar com um humano\" que alguém do time vai te responder por aqui.";
+  }
+  try {
+    const res = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 500,
+      system: PLATFORM_KNOWLEDGE,
+      messages: history.map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content })),
+    });
+    return res.content.find((b) => b.type === "text")?.text?.trim() || "Não consegui gerar uma resposta agora. Tente de novo ou fale com um humano.";
+  } catch (e) {
+    console.error("[claude] falha no chat de suporte:", e.message);
+    return "Tive um problema para responder agora. Tente de novo em instantes, ou toque em \"Falar com um humano\".";
+  }
+}
 export async function extractFinancials(pdfBase64) {
   if (!client) return null;
 
