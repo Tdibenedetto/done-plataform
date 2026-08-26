@@ -41,6 +41,34 @@ const ACTION_TEXT = {
   pipeline: "Passe a planejar reposição com base no histórico de vendas por SKU dos últimos meses, não no feeling — isso sozinho já reduz boa parte da ruptura recorrente.",
 };
 
+// Checklist prático por dimensão — a trilha de ação foca nas dimensões mais fracas do diagnóstico.
+const TRACK_ITEMS = {
+  processo: [
+    "Definir uma cadência fixa de follow-up (ex: D+2, D+7, D+15) e documentar em um lugar único",
+    "Cadastrar todos os leads em aberto no pipeline da Ferramenta de Vendas, sem exceção",
+    "Preencher a data de fechamento prevista em cada lead ativo",
+    "Revisar semanalmente os leads parados há mais de 3 dias e retomar contato",
+  ],
+  preco: [
+    "Levantar a margem real por categoria de produto (não só por SKU individual)",
+    "Definir um piso de desconto que qualquer vendedor pode dar sem aprovação",
+    "Preencher a margem real dos leads fechados na Ferramenta de Vendas",
+    "Agendar revisão trimestral de precificação por categoria",
+  ],
+  time: [
+    "Implementar acompanhamento semanal de metas por vendedor (não mensal)",
+    "Definir a meta mensal de cada vendedor na Ferramenta de Vendas",
+    "Fazer uma conversa curta e regular de performance com cada vendedor",
+    "Identificar o vendedor com melhor taxa de conversão e mapear o que ele faz diferente",
+  ],
+  pipeline: [
+    "Fazer o upload da planilha de vendas/estoque na Ferramenta de Gestão",
+    "Revisar semanalmente os alertas de ruptura e excesso de estoque",
+    "Planejar reposição com base no histórico de vendas por SKU, não no feeling",
+    "Cruzar os SKUs parados com a categoria de menor margem para priorizar ação",
+  ],
+};
+
 export default function ComercialCoach({ goTo, onResult }) {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState(null);
@@ -252,7 +280,7 @@ export default function ComercialCoach({ goTo, onResult }) {
       </div>
 
       {!checkingBilling && (unlocked ? (
-        <UnlockedContent dimsArr={dimsArr} />
+        <UnlockedContent dimsArr={dimsArr} top3={top3} result={result} onResultChange={setResult} />
       ) : (
         <div style={{ background: C.ink, color: "#fff", borderRadius: 16, padding: 26, display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 18 }}>Relatório completo — R$ 147</div>
@@ -270,7 +298,7 @@ export default function ComercialCoach({ goTo, onResult }) {
   );
 }
 
-function UnlockedContent({ dimsArr }) {
+function UnlockedContent({ dimsArr, top3, result, onResultChange }) {
   const avgScore = dimsArr.reduce((s, d) => s + d.score, 0) / dimsArr.length;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -295,6 +323,8 @@ function UnlockedContent({ dimsArr }) {
         Comparativo com o benchmark do seu segmento — prévia ilustrativa. A plataforma ainda não tem uma base de clientes suficiente para um benchmark estatístico real; esta seção será calculada de verdade assim que houver dados suficientes.
       </div>
 
+      {result?.id && <TrilhaDeAcao top3={top3} result={result} onResultChange={onResultChange} />}
+
       <div style={{ background: C.ink, borderRadius: 16, padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: "#fff" }}>Plano de ação completo</div>
         {dimsArr.map((d, i) => (
@@ -307,6 +337,66 @@ function UnlockedContent({ dimsArr }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function TrilhaDeAcao({ top3, result, onResultChange }) {
+  const [busyKey, setBusyKey] = useState(null);
+  const progress = result.trackProgress || {};
+
+  const items = top3.flatMap((d) =>
+    TRACK_ITEMS[d.key].map((text, i) => ({ itemKey: `${d.key}-${i}`, text, dimLabel: d.label }))
+  );
+  const doneCount = items.filter((it) => progress[it.itemKey]).length;
+  const pct = items.length ? Math.round((doneCount / items.length) * 100) : 0;
+
+  async function toggle(itemKey) {
+    const done = !progress[itemKey];
+    setBusyKey(itemKey);
+    try {
+      const updated = await api.coachTrackToggle(result.id, itemKey, done);
+      onResultChange(updated);
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15 }}>Trilha de ação</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Checklist prático focado nas suas 3 prioridades — marque conforme for executando.</div>
+        </div>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15, color: pct === 100 ? C.sage : C.gold, whiteSpace: "nowrap" }}>{doneCount}/{items.length}</div>
+      </div>
+
+      <div style={{ height: 6, background: C.border, borderRadius: 999, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: pct === 100 ? C.sage : C.gold, borderRadius: 999, transition: "width .2s" }} />
+      </div>
+
+      {top3.map((d) => (
+        <div key={d.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: C.inkSoft, textTransform: "uppercase", letterSpacing: "0.03em" }}>{d.label}</div>
+          {TRACK_ITEMS[d.key].map((text, i) => {
+            const itemKey = `${d.key}-${i}`;
+            const checked = !!progress[itemKey];
+            return (
+              <label key={itemKey} style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", opacity: busyKey === itemKey ? 0.6 : 1 }}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(itemKey)}
+                  disabled={busyKey === itemKey}
+                  style={{ marginTop: 3, width: 15, height: 15, accentColor: C.gold, cursor: "pointer", flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 13, lineHeight: 1.5, color: checked ? C.muted : C.ink, textDecoration: checked ? "line-through" : "none" }}>{text}</span>
+              </label>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

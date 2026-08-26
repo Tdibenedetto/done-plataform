@@ -71,6 +71,7 @@ model CoachResult {
   dimTime        Float
   dimPipeline    Float
   final          Int
+  trackProgress  Json?    @default("{}") // checklist da trilha de ação: { "processo-0": true, ... }
   createdAt      DateTime @default(now())
 
   @@index([organizationId])
