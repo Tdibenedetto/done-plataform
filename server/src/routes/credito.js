@@ -2,9 +2,12 @@ import { Router } from "express";
 import multer from "multer";
 import { prisma } from "../lib/prisma.js";
 import { extractFinancials } from "../lib/claude.js";
+import { requirePaidModule } from "../middleware/auth.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+router.use(requirePaidModule);
 
 // -------- Regras de crédito (transparentes, ajustáveis — não é birô oficial) --------
 function avaliarCredito(f) {

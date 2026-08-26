@@ -25,3 +25,14 @@ export function requireMaster(req, res, next) {
   next();
 }
 
+// Exige que a organização tenha uma assinatura ativa de Vendas, Gestão ou Completo.
+export async function requirePaidModule(req, res, next) {
+  const sub = await prisma.subscription.findFirst({
+    where: { organizationId: req.organizationId, status: "active", module: { in: ["vendas", "gestao", "completo"] } },
+  });
+  if (!sub) {
+    return res.status(402).json({ error: "Este recurso é exclusivo para assinantes de Vendas, Gestão ou do Pacote Completo." });
+  }
+  next();
+}
+

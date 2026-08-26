@@ -7,6 +7,8 @@ const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "
 
 export default function Credito() {
   const [history, setHistory] = useState(null);
+  const [locked, setLocked] = useState(false);
+  const [lockMessage, setLockMessage] = useState(null);
   const [cnpjInput, setCnpjInput] = useState("");
   const [busyCnpj, setBusyCnpj] = useState(false);
   const [error, setError] = useState(null);
@@ -15,7 +17,12 @@ export default function Credito() {
   const [showHistory, setShowHistory] = useState(false);
 
   async function reload() {
-    setHistory(await api.creditoList());
+    try {
+      setHistory(await api.creditoList());
+    } catch (e) {
+      setLocked(true);
+      setLockMessage(e.message);
+    }
   }
   useEffect(() => { reload(); }, []);
 
@@ -48,6 +55,20 @@ export default function Credito() {
     } finally {
       setUploadingBalanco(false);
     }
+  }
+
+  if (locked) {
+    return (
+      <div style={S.moduleCol}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 32, display: "flex", flexDirection: "column", gap: 14, alignItems: "center", textAlign: "center", maxWidth: 480, margin: "40px auto" }}>
+          <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.gold, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <CreditCard size={22} color="#fff" />
+          </div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>Análise de Crédito</div>
+          <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>{lockMessage || "Este recurso é exclusivo para assinantes de Vendas, Gestão ou do Pacote Completo."}</p>
+        </div>
+      </div>
+    );
   }
 
   if (history === null) return <div style={{ color: C.muted, fontSize: 13 }}>Carregando...</div>;
