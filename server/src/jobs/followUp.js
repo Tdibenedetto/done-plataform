@@ -10,7 +10,12 @@ function startOfMonth() {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
-async function run() {
+/**
+ * Varre todas as organizações com Vendas/Completo ativo e envia lembrete
+ * automático de follow-up para leads parados. Reaproveitável tanto como
+ * chamada em processo (agendador leve dentro do done-api) quanto via CLI.
+ */
+export async function runFollowUpCheck() {
   const orgs = await prisma.organization.findMany({
     where: { subscriptions: { some: { status: "active", module: { in: ["vendas", "completo"] } } } },
     select: { id: true, name: true, followUpDays: true },
@@ -55,17 +60,22 @@ async function run() {
         remaining -= 1;
         totalSent += 1;
       } catch (e) {
-        console.error(`[followup-cron] falha ao alertar lead ${lead.id} (${org.name}):`, e.message);
+        console.error(`[followup] falha ao alertar lead ${lead.id} (${org.name}):`, e.message);
       }
     }
   }
 
-  console.log(`[followup-cron] concluído — ${totalSent} lembrete(s) enviado(s) em ${orgs.length} organização(ões) verificada(s).`);
-  await prisma.$disconnect();
+  console.log(`[followup] verificação concluída — ${totalSent} lembrete(s) enviado(s) em ${orgs.length} organização(ões) verificada(s).`);
+  return { totalSent, orgsChecked: orgs.length };
 }
 
-run().catch(async (e) => {
-  console.error("[followup-cron] falha geral:", e);
-  await prisma.$disconnect();
-  process.exit(1);
-});
+// Permite continuar rodando como script standalone (ex: se um dia migrar para um Cron Job de verdade).
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runFollowUpCheck()
+    .then(() => prisma.$disconnect())
+    .catch(async (e) => {
+      console.error("[followup] falha geral:", e);
+      await prisma.$disconnect();
+      process.exit(1);
+    });
+}
