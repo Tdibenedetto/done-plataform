@@ -8,7 +8,7 @@ const router = Router();
 
 // Apenas o Master assina/compra módulos para a organização.
 router.post("/checkout", requireMaster, async (req, res) => {
-  const { product } = req.body; // "coach_report" | "vendas" | "gestao" | "completo"
+  const { product } = req.body; // "coach_report" | "vendas" | "gestao" | "completo" | "whatsapp" | "dre"
   const price = PRICES[product];
   if (!price) return res.status(400).json({ error: "Produto inválido." });
 
@@ -63,7 +63,10 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
       await prisma.subscription.create({
         data: { organizationId, module: product, status: "active", stripeSubscriptionId: session.subscription },
       });
-      await prisma.organization.update({ where: { id: organizationId }, data: { plan: product } });
+      // Só os planos principais (não add-ons como whatsapp/dre) definem o "plan" da organização.
+      if (["vendas", "gestao", "completo"].includes(product)) {
+        await prisma.organization.update({ where: { id: organizationId }, data: { plan: product } });
+      }
     }
   }
 

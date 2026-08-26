@@ -14,5 +14,8 @@ export const PRICES = {
   vendas: { label: "Ferramenta de Vendas", amountCents: 19700, extraUserCents: 2900 },
   gestao: { label: "Ferramenta de Gestão", amountCents: 24700, extraUserCents: 1900 },
   completo: { label: "Pacote Completo (Vendas + Gestão)", amountCents: 39700, extraUserCents: 3900 },
+  // Add-ons pagos à parte — exigem assinatura ativa de Vendas, Gestão ou Completo (ver requirePaidModule).
+  whatsapp: { label: "Add-on: Captação de Leads via WhatsApp", amountCents: 9700 },
+  dre: { label: "Add-on: DRE Simplificado / Fluxo de Caixa", amountCents: 14700 },
 };
 
