@@ -13,7 +13,9 @@ import VisaoGeral from "./modules/VisaoGeral.jsx";
 
 export default function App() {
   const [session, setSession] = useState(() => loadSession());
-  const [activeModule, setActiveModule] = useState("overview");
+  const [activeModule, setActiveModule] = useState(() =>
+    window.location.pathname.startsWith("/billing/") ? "coach" : "overview"
+  );
   const [coachResult, setCoachResult] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -23,6 +25,13 @@ export default function App() {
     const token = path.replace("/convite/", "");
     return <InviteAcceptScreen token={token} onAuth={(t, u) => { saveSession(t, u); setSession({ token: t, user: u }); window.history.replaceState(null, "", "/"); }} />;
   }
+
+  // Retorno do checkout do Stripe: /billing/success ou /billing/cancel — limpa a URL e volta pro Comercial Coach.
+  useEffect(() => {
+    if (window.location.pathname.startsWith("/billing/")) {
+      window.history.replaceState(null, "", "/");
+    }
+  }, []);
 
   useEffect(() => {
     if (session) api.coachLatest().then(setCoachResult).catch(() => setCoachResult(null));

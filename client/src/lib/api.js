@@ -44,6 +44,7 @@ export const api = {
   gestaoGoalSet: (data) => request("/gestao/goals", { method: "PUT", body: data }),
 
   checkout: (product) => request("/billing/checkout", { method: "POST", body: { product } }),
+  billingStatus: () => request("/billing/status"),
 };
 
 export function saveSession(token, user) {

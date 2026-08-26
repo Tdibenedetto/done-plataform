@@ -7,6 +7,40 @@ import { C, S, FONT_DISPLAY } from "../theme.js";
 import { api } from "../lib/api.js";
 import { DIMENSIONS, QUESTIONS, rangeFor, MODULE_HINT, MODULE_LABEL } from "./questions.js";
 
+function tierOf(score) {
+  return score >= 75 ? "alto" : score >= 50 ? "medio" : "baixo";
+}
+
+const ANALYSIS_TEXT = {
+  processo: {
+    baixo: "O processo comercial ainda é informal — decisões e follow-ups não seguem uma rotina definida, o que faz oportunidades esfriarem sem necessidade.",
+    medio: "Existe uma estrutura básica de processo, mas com falhas de constância — o funil funciona, mas depende de lembrança individual, não de rotina.",
+    alto: "O processo comercial está bem estruturado, com rotina clara de acompanhamento — a atenção agora deve ir para refinar detalhes, não reconstruir a base.",
+  },
+  preco: {
+    baixo: "A precificação não segue uma lógica clara de margem — os preços parecem definidos individualmente, sem critério consistente entre produtos ou clientes.",
+    medio: "Existe alguma lógica de precificação, mas a margem real não é acompanhada de perto — decisões de desconto acontecem sem visibilidade do impacto.",
+    alto: "A precificação é bem calibrada e a margem é acompanhada de perto — o próximo passo é usar esse controle para negociar com mais confiança.",
+  },
+  time: {
+    baixo: "O time comercial não tem rotina de acompanhamento nem incentivo claro — isso costuma significar desempenho desigual entre vendedores, sem visibilidade de quem precisa de apoio.",
+    medio: "Existe alguma estrutura de metas para o time, mas o acompanhamento não é frequente o suficiente para corrigir o rumo a tempo.",
+    alto: "O time tem rotina de acompanhamento e incentivo claros — a atenção agora deve ir para reter e desenvolver os melhores vendedores.",
+  },
+  pipeline: {
+    baixo: "Não há visibilidade clara do funil nem planejamento de reposição — decisões de estoque e vendas parecem reativas, não planejadas.",
+    medio: "Existe alguma visibilidade do pipeline, mas o planejamento ainda é feito no feeling, sem dado histórico orientando a decisão.",
+    alto: "O pipeline é acompanhado de perto e o planejamento é orientado por dado — o próximo passo é refinar a precisão da previsão.",
+  },
+};
+
+const ACTION_TEXT = {
+  processo: "Defina uma rotina fixa de follow-up (ex: contato em D+2, D+7, D+15 após cada proposta) e registre isso em um lugar único, mesmo que simples — o ganho vem da constância, não da ferramenta.",
+  preco: "Revise a margem real por categoria (não só por produto) pelo menos uma vez por trimestre, e defina um piso de desconto que qualquer vendedor pode dar sem precisar de aprovação.",
+  time: "Implemente acompanhamento semanal — não mensal — de metas por vendedor, com uma conversa curta e regular. Não precisa ser formal, precisa ser constante.",
+  pipeline: "Passe a planejar reposição com base no histórico de vendas por SKU dos últimos meses, não no feeling — isso sozinho já reduz boa parte da ruptura recorrente.",
+};
+
 export default function ComercialCoach({ goTo, onResult }) {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState(null);
@@ -15,12 +49,24 @@ export default function ComercialCoach({ goTo, onResult }) {
   const [answers, setAnswers] = useState({});
   const [dimIndex, setDimIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [checkingBilling, setCheckingBilling] = useState(true);
 
   useEffect(() => {
     api.coachLatest()
       .then((r) => { setResult(r); if (r) setStage("results"); })
       .finally(() => setLoading(false));
   }, []);
+
+  // Confere se o relatório completo já foi pago (inclusive ao voltar do checkout do Stripe).
+  useEffect(() => {
+    if (stage !== "results") return;
+    setCheckingBilling(true);
+    api.billingStatus()
+      .then((s) => setUnlocked((s.payments || []).some((p) => p.type === "coach_report")))
+      .catch(() => setUnlocked(false))
+      .finally(() => setCheckingBilling(false));
+  }, [stage]);
 
   const questions = segment ? QUESTIONS[segment] : null;
 
@@ -205,17 +251,62 @@ export default function ComercialCoach({ goTo, onResult }) {
         ))}
       </div>
 
-      <div style={{ background: C.ink, color: "#fff", borderRadius: 16, padding: 26, display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
-        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 18 }}>Relatório completo — R$ 147</div>
-        <p style={{ fontSize: 13.5, opacity: 0.8, lineHeight: 1.55, maxWidth: 440, margin: "0 0 10px" }}>
-          Análise detalhada de cada resposta, comparação com o benchmark do seu segmento e um plano de ação completo, não só as 3 prioridades.
-        </p>
-        <button style={S.primaryBtn} onClick={() => api.checkout("coach_report").then((r) => (window.location.href = r.url))}>
-          Desbloquear relatório completo
-        </button>
-      </div>
+      {!checkingBilling && (unlocked ? (
+        <UnlockedContent dimsArr={dimsArr} />
+      ) : (
+        <div style={{ background: C.ink, color: "#fff", borderRadius: 16, padding: 26, display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 18 }}>Relatório completo — R$ 147</div>
+          <p style={{ fontSize: 13.5, opacity: 0.8, lineHeight: 1.55, maxWidth: 440, margin: "0 0 10px" }}>
+            Análise detalhada de cada resposta, comparação com o benchmark do seu segmento e um plano de ação completo, não só as 3 prioridades.
+          </p>
+          <button style={S.primaryBtn} onClick={() => api.checkout("coach_report").then((r) => (window.location.href = r.url))}>
+            Desbloquear relatório completo
+          </button>
+        </div>
+      ))}
 
       <button style={S.ghostBtn} onClick={reset}><RefreshCw size={14} /> Refazer diagnóstico</button>
+    </div>
+  );
+}
+
+function UnlockedContent({ dimsArr }) {
+  const avgScore = dimsArr.reduce((s, d) => s + d.score, 0) / dimsArr.length;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.sage, fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14 }}>
+        ✓ Relatório completo desbloqueado
+      </div>
+
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22, display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15 }}>Análise detalhada por dimensão</div>
+        {dimsArr.map((d) => (
+          <div key={d.key} style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 13.5 }}>{d.label}</span>
+              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 13.5, color: C.gold }}>{Math.round(d.score)}</span>
+            </div>
+            <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>{ANALYSIS_TEXT[d.key][tierOf(d.score)]}</p>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: C.goldSoft, borderRadius: 12, padding: "12px 16px", fontSize: 11.5, color: "#6B5122", lineHeight: 1.5 }}>
+        Comparativo com o benchmark do seu segmento — prévia ilustrativa. A plataforma ainda não tem uma base de clientes suficiente para um benchmark estatístico real; esta seção será calculada de verdade assim que houver dados suficientes.
+      </div>
+
+      <div style={{ background: C.ink, borderRadius: 16, padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: "#fff" }}>Plano de ação completo</div>
+        {dimsArr.map((d, i) => (
+          <div key={d.key} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 12, color: C.gold, background: "rgba(184,134,58,0.15)", width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "#fff", marginBottom: 3 }}>{d.label}</div>
+              <p style={{ fontSize: 12.5, color: "#C7CAD4", lineHeight: 1.55, margin: 0 }}>{ACTION_TEXT[d.key]}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
