@@ -11,6 +11,7 @@ model Organization {
   id        String   @id @default(uuid())
   name      String
   plan      String?  // "vendas" | "gestao" | "completo" | null (sem assinatura ainda)
+  followUpDays Int   @default(3) // dias sem atualização até disparar lembrete automático
   createdAt DateTime @default(now())
 
   users         User[]
@@ -24,6 +25,7 @@ model Organization {
   subscriptions Subscription[]
   payments      Payment[]
   supportThreads SupportThread[]
+  followUpAlerts FollowUpAlert[]
 }
 
 model User {
@@ -34,6 +36,7 @@ model User {
   passwordHash   String
   name           String
   role           String       @default("master") // "master" | "member"
+  phone          String?      // E.164, usado nos lembretes automáticos de follow-up
   createdAt      DateTime     @default(now())
 
   assignedLeads Lead[]
@@ -234,5 +237,17 @@ model ChatMessage {
   createdAt DateTime @default(now())
 
   @@index([threadId])
+}
+
+model FollowUpAlert {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leadId         String
+  sentTo         String   // telefone para o qual foi enviado
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([leadId])
 }
 

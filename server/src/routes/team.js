@@ -11,14 +11,36 @@ const router = Router();
 router.get("/", async (req, res) => {
   const users = await prisma.user.findMany({
     where: { organizationId: req.organizationId },
-    select: { id: true, name: true, email: true, role: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, phone: true, createdAt: true },
     orderBy: { createdAt: "asc" },
   });
   const invites = await prisma.invite.findMany({
     where: { organizationId: req.organizationId, status: "pending" },
     select: { id: true, email: true, createdAt: true, expiresAt: true },
   });
-  res.json({ users, invites, maxTeamSize: MAX_TEAM_SIZE });
+  const org = await prisma.organization.findUnique({ where: { id: req.organizationId }, select: { followUpDays: true } });
+  res.json({ users, invites, maxTeamSize: MAX_TEAM_SIZE, followUpDays: org.followUpDays });
+});
+
+// Cada usuário define o próprio telefone (E.164), usado nos lembretes automáticos de follow-up.
+router.patch("/phone", async (req, res) => {
+  const { phone } = req.body;
+  const clean = (phone || "").trim();
+  if (clean && !/^\+\d{8,15}$/.test(clean)) {
+    return res.status(400).json({ error: "Use o formato internacional, ex: +5511999999999." });
+  }
+  await prisma.user.update({ where: { id: req.userId }, data: { phone: clean || null } });
+  res.json({ ok: true });
+});
+
+// Apenas o Master ajusta depois de quantos dias parado um lead gera lembrete automático.
+router.patch("/followup-settings", requireMaster, async (req, res) => {
+  const days = Number(req.body.followUpDays);
+  if (!Number.isInteger(days) || days < 1 || days > 30) {
+    return res.status(400).json({ error: "Informe um número de dias entre 1 e 30." });
+  }
+  await prisma.organization.update({ where: { id: req.organizationId }, data: { followUpDays: days } });
+  res.json({ ok: true });
 });
 
 // Apenas o Master convida novos membros.

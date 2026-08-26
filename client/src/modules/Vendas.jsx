@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Plus, Trash2, UserPlus, X, Mail, MessageSquare, Calendar, Filter, TrendingUp, DollarSign, Briefcase } from "lucide-react";
+import { Plus, Trash2, UserPlus, X, Mail, MessageSquare, Calendar, Filter, TrendingUp, DollarSign, Briefcase, Phone } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
 
@@ -142,13 +142,11 @@ export default function FerramentaVendas() {
           <button style={S.ghostBtn} onClick={() => setShowCarteira((s) => !s)}><Briefcase size={14} /> Carteira</button>
           <button style={S.ghostBtn} onClick={() => setShowAnnual((s) => !s)}><Calendar size={14} /> Meta anual</button>
           <button style={S.ghostBtn} onClick={() => setShowMetrics((s) => !s)}><TrendingUp size={14} /> Métricas</button>
-          {isMaster && (
-            <button style={S.ghostBtn} onClick={() => setShowTeam((s) => !s)}><UserPlus size={14} /> Equipe</button>
-          )}
+          <button style={S.ghostBtn} onClick={() => setShowTeam((s) => !s)}><UserPlus size={14} /> {isMaster ? "Equipe" : "Meu contato"}</button>
         </div>
       </div>
 
-      {isMaster && showTeam && <TeamPanel team={team} onChange={reload} />}
+      {showTeam && <TeamPanel team={team} isMaster={isMaster} onChange={reload} />}
       {showMetrics && <MetricsPanel leads={leads} />}
       {showAnnual && <AnnualGoalsPanel team={team} goals={goals} leads={leads} isMaster={isMaster} onChange={reload} />}
       {showCarteira && <CarteiraPanel team={team} leads={leads} isMaster={isMaster} />}
@@ -665,10 +663,16 @@ function CarteiraPanel({ team, leads, isMaster }) {
   );
 }
 
-function TeamPanel({ team, onChange }) {
+function TeamPanel({ team, isMaster, onChange }) {
+  const me = team.users.find((u) => u.id === loadSession().user.id);
   const [email, setEmail] = useState("");
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [phone, setPhone] = useState(me?.phone || "");
+  const [phoneMsg, setPhoneMsg] = useState(null);
+  const [savingPhone, setSavingPhone] = useState(false);
+  const [days, setDays] = useState(team.followUpDays || 3);
+  const [savingDays, setSavingDays] = useState(false);
 
   async function invite() {
     if (!email.trim()) return;
@@ -688,6 +692,30 @@ function TeamPanel({ team, onChange }) {
   async function revoke(id) { await api.teamRevokeInvite(id); onChange(); }
   async function remove(id) { await api.teamRemoveMember(id); onChange(); }
 
+  async function savePhone() {
+    setSavingPhone(true);
+    setPhoneMsg(null);
+    try {
+      await api.teamSetPhone(phone.trim());
+      setPhoneMsg("Telefone salvo.");
+      onChange();
+    } catch (e) {
+      setPhoneMsg(e.message);
+    } finally {
+      setSavingPhone(false);
+    }
+  }
+
+  async function saveDays() {
+    setSavingDays(true);
+    try {
+      await api.teamSetFollowupDays(Number(days));
+      onChange();
+    } finally {
+      setSavingDays(false);
+    }
+  }
+
   const slotsUsed = team.users.length + team.invites.length;
   const slotsLeft = team.maxTeamSize - slotsUsed;
 
@@ -695,19 +723,39 @@ function TeamPanel({ team, onChange }) {
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5 }}>Equipe</div>
-        <div style={{ fontSize: 11.5, color: C.muted }}>{slotsUsed}/{team.maxTeamSize} vagas usadas</div>
+        {isMaster && <div style={{ fontSize: 11.5, color: C.muted }}>{slotsUsed}/{team.maxTeamSize} vagas usadas</div>}
       </div>
+
+      <div style={{ background: C.paper, borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ fontSize: 11.5, color: C.inkSoft, display: "flex", alignItems: "center", gap: 5 }}>
+          <Phone size={12} /> Meu WhatsApp para lembretes automáticos de follow-up
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input style={{ ...S.input, flex: 1, minWidth: 160 }} placeholder="+5511999999999" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <button style={S.primaryBtnSm} disabled={savingPhone} onClick={savePhone}>{savingPhone ? "Salvando..." : "Salvar"}</button>
+        </div>
+        {phoneMsg && <div style={{ fontSize: 11, color: C.inkSoft }}>{phoneMsg}</div>}
+      </div>
+
+      {isMaster && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 11.5, color: C.inkSoft }}>Avisar lead parado após</div>
+          <input type="number" min={1} max={30} style={{ ...S.input, width: 64, padding: "6px 8px" }} value={days} onChange={(e) => setDays(e.target.value)} />
+          <div style={{ fontSize: 11.5, color: C.inkSoft }}>dias sem atualização</div>
+          <button style={S.ghostBtn} disabled={savingDays} onClick={saveDays}>{savingDays ? "Salvando..." : "Salvar"}</button>
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {team.users.map((u) => (
           <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
-            <span>{u.name} <span style={{ color: C.muted }}>· {u.email} · {u.role === "master" ? "Master" : "Vendedor"}</span></span>
-            {u.role !== "master" && (
+            <span>{u.name} <span style={{ color: C.muted }}>· {u.email} · {u.role === "master" ? "Master" : "Vendedor"}{u.phone ? " · WhatsApp configurado" : ""}</span></span>
+            {isMaster && u.role !== "master" && (
               <button style={{ ...S.moveBtn, color: C.danger }} onClick={() => remove(u.id)}><Trash2 size={10} /></button>
             )}
           </div>
         ))}
-        {team.invites.map((inv) => (
+        {isMaster && team.invites.map((inv) => (
           <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, color: C.muted }}>
             <span><Mail size={11} style={{ verticalAlign: -1, marginRight: 4 }} />{inv.email} · convite pendente</span>
             <button style={S.moveBtn} onClick={() => revoke(inv.id)}><X size={10} /></button>
@@ -715,14 +763,14 @@ function TeamPanel({ team, onChange }) {
         ))}
       </div>
 
-      {slotsLeft > 0 ? (
+      {isMaster && (slotsLeft > 0 ? (
         <div style={{ display: "flex", gap: 8 }}>
           <input style={{ ...S.input, flex: 1 }} placeholder="E-mail do vendedor" value={email} onChange={(e) => setEmail(e.target.value)} />
           <button style={S.primaryBtnSm} disabled={busy} onClick={invite}>{busy ? "Enviando..." : "Convidar"}</button>
         </div>
       ) : (
         <div style={{ fontSize: 12, color: C.muted }}>Vagas do plano esgotadas.</div>
-      )}
+      ))}
       {msg && <div style={{ fontSize: 11.5, color: C.inkSoft, wordBreak: "break-all" }}>{msg}</div>}
     </div>
   );
