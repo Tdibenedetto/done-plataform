@@ -351,20 +351,22 @@ export default function FerramentaGestao() {
       {showSkus && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Todos os SKUs (histórico combinado)</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 100px 80px 90px", gap: 8, fontSize: 10.5, color: C.muted, fontWeight: 600, padding: "0 8px 8px", borderBottom: `1px solid ${C.border}` }}>
-              <span>SKU</span><span>Produto</span><span>Categoria</span><span>Faturamento</span><span>Margem</span><span>Estoque</span>
-            </div>
-            {skuList.map((s) => (
-              <div key={s.sku} style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 100px 80px 90px", gap: 8, fontSize: 12, padding: "8px", borderBottom: `1px solid ${C.border}` }}>
-                <span style={{ color: C.muted }}>{s.sku}</span>
-                <span>{s.produto}</span>
-                <span style={{ color: C.inkSoft }}>{s.categoria}</span>
-                <span style={{ fontFamily: FONT_DISPLAY, color: C.gold, fontWeight: 600 }}>{fmtBRL(s.valor)}</span>
-                <span>{s.margemMedia}%</span>
-                <span style={{ color: s.estoque === "ruptura" ? C.danger : s.estoque === "excesso" ? C.gold : C.sage }}>{s.estoque || "ok"}</span>
+          <div style={{ overflowX: "auto" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 620 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 100px 80px 90px", gap: 8, fontSize: 10.5, color: C.muted, fontWeight: 600, padding: "0 8px 8px", borderBottom: `1px solid ${C.border}` }}>
+                <span>SKU</span><span>Produto</span><span>Categoria</span><span>Faturamento</span><span>Margem</span><span>Estoque</span>
               </div>
-            ))}
+              {skuList.map((s) => (
+                <div key={s.sku} style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr 1fr 100px 80px 90px", gap: 8, fontSize: 12, padding: "8px", borderBottom: `1px solid ${C.border}` }}>
+                  <span style={{ color: C.muted }}>{s.sku}</span>
+                  <span>{s.produto}</span>
+                  <span style={{ color: C.inkSoft }}>{s.categoria}</span>
+                  <span style={{ fontFamily: FONT_DISPLAY, color: C.gold, fontWeight: 600 }}>{fmtBRL(s.valor)}</span>
+                  <span>{s.margemMedia}%</span>
+                  <span style={{ color: s.estoque === "ruptura" ? C.danger : s.estoque === "excesso" ? C.gold : C.sage }}>{s.estoque || "ok"}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
