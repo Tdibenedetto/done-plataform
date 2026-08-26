@@ -25,6 +25,7 @@ export const RESPONSIVE_CSS = `
     .done-auth-grid > div:first-child h1 { font-size: 22px !important; }
     .done-auth-grid > div:first-child svg { display: none; }
     .done-metrics-grid { grid-template-columns: 1fr !important; }
+    .done-two-col-grid { grid-template-columns: 1fr !important; }
   }
 `;
 

@@ -253,7 +253,7 @@ export default function FerramentaGestao() {
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+      <div className="done-metrics-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
         <StatCard label="Faturamento total (histórico)" value={fmtBRL(total)} />
         <StatCard label="Ticket médio por linha" value={fmtBRL(Math.round(total / rows.length))} />
         <StatCard label="Alertas de estoque" value={`${alerts.length} SKUs`} tone={alerts.length ? C.danger : C.sage} />
@@ -272,7 +272,7 @@ export default function FerramentaGestao() {
         </ResponsiveContainer>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div className="done-two-col-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 14 }}>
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Margem média por categoria</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
