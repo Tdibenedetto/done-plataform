@@ -493,7 +493,7 @@ function MetricsPanel({ leads }) {
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5 }}>Métricas de conversão</div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+      <div className="done-metrics-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
         <div style={{ background: C.paper, borderRadius: 10, padding: 14 }}>
           <div style={{ fontSize: 11, color: C.muted }}>Taxa de conversão</div>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 22, color: C.sage }}>
