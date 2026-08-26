@@ -63,7 +63,7 @@ services:
   - type: cron
     name: done-followup-cron
     runtime: node
-    plan: free
+    plan: starter
     rootDir: server
     schedule: "0 12 * * *" # 12:00 UTC = 09:00 no horário de Brasília
     buildCommand: npm install && npx prisma generate
