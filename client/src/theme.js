@@ -18,7 +18,7 @@ export const RESPONSIVE_CSS = `
     .done-sidebar { position: fixed; left: -280px; top: 0; bottom: 0; width: 260px; z-index: 100; box-shadow: 8px 0 30px rgba(0,0,0,.25); }
     .done-sidebar.open { left: 0; }
     .done-mobile-topbar { display: flex !important; position: fixed; top: 0; left: 0; right: 0; z-index: 80; }
-    .done-content-wrap { padding-top: 66px; padding-left: 16px !important; padding-right: 16px !important; max-width: 100% !important; }
+    .done-content-wrap { padding-top: 66px !important; padding-left: 16px !important; padding-right: 16px !important; max-width: 100% !important; }
     .done-sidebar-overlay.open { display: block; position: fixed; inset: 0; background: rgba(10,14,26,.45); z-index: 90; }
     .done-auth-grid { grid-template-columns: 1fr !important; max-width: 420px !important; }
     .done-auth-grid > div:first-child { min-height: 220px !important; padding: 32px 28px !important; }

@@ -131,7 +131,7 @@ export default function FerramentaVendas() {
 
   return (
     <div style={S.moduleCol}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Vendas</h2>
           <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>

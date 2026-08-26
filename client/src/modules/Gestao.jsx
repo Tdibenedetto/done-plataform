@@ -213,14 +213,14 @@ export default function FerramentaGestao() {
 
   return (
     <div style={S.moduleCol}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, margin: 0 }}>Ferramenta de Gestão</h2>
           <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>
             {data.uploads.length} {data.uploads.length === 1 ? "planilha enviada" : "planilhas enviadas"} · última em {new Date(data.uploads[data.uploads.length - 1].createdAt).toLocaleDateString("pt-BR")}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button style={S.ghostBtn} onClick={() => setShowSkus((s) => !s)}><List size={14} /> {showSkus ? "Ocultar SKUs" : "Ver por SKU"}</button>
           <label style={{ ...S.ghostBtn, cursor: "pointer" }}>
             <Upload size={14} /> {uploading ? "Enviando..." : "Nova planilha"}
