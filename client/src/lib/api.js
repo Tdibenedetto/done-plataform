@@ -88,5 +88,6 @@ Object.assign(api, {
   chatThreadResolve: (id) => request(`/chat/threads/${id}/resolve`, { method: "POST" }),
   teamSetPhone: (phone) => request("/team/phone", { method: "PATCH", body: { phone } }),
   teamSetFollowupDays: (followUpDays) => request("/team/followup-settings", { method: "PATCH", body: { followUpDays } }),
+  teamFollowupTest: () => request("/team/followup-test", { method: "POST" }),
 });
 

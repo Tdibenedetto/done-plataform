@@ -697,6 +697,8 @@ function TeamPanel({ team, isMaster, onChange }) {
   const [savingPhone, setSavingPhone] = useState(false);
   const [days, setDays] = useState(team.followUpDays || 3);
   const [savingDays, setSavingDays] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState(null);
 
   async function invite() {
     if (!email.trim()) return;
@@ -740,6 +742,19 @@ function TeamPanel({ team, isMaster, onChange }) {
     }
   }
 
+  async function runTest() {
+    setTesting(true);
+    setTestMsg(null);
+    try {
+      const r = await api.teamFollowupTest();
+      setTestMsg(`Checagem rodou: ${r.totalSent} lembrete(s) enviado(s), ${r.orgsChecked} organização(ões) com plano ativo verificada(s).`);
+    } catch (e) {
+      setTestMsg(e.message);
+    } finally {
+      setTesting(false);
+    }
+  }
+
   const slotsUsed = team.users.length + team.invites.length;
   const slotsLeft = team.maxTeamSize - slotsUsed;
 
@@ -762,11 +777,18 @@ function TeamPanel({ team, isMaster, onChange }) {
       </div>
 
       {isMaster && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ fontSize: 11.5, color: C.inkSoft }}>Avisar lead parado após</div>
-          <input type="number" min={1} max={30} style={{ ...S.input, width: 64, padding: "6px 8px" }} value={days} onChange={(e) => setDays(e.target.value)} />
-          <div style={{ fontSize: 11.5, color: C.inkSoft }}>dias sem atualização</div>
-          <button style={S.ghostBtn} disabled={savingDays} onClick={saveDays}>{savingDays ? "Salvando..." : "Salvar"}</button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 11.5, color: C.inkSoft }}>Avisar lead parado após</div>
+            <input type="number" min={0} max={30} style={{ ...S.input, width: 64, padding: "6px 8px" }} value={days} onChange={(e) => setDays(e.target.value)} />
+            <div style={{ fontSize: 11.5, color: C.inkSoft }}>dias sem atualização</div>
+            <button style={S.ghostBtn} disabled={savingDays} onClick={saveDays}>{savingDays ? "Salvando..." : "Salvar"}</button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <button style={{ ...S.ghostBtn, fontSize: 11.5 }} disabled={testing} onClick={runTest}>{testing ? "Rodando..." : "Testar agora"}</button>
+            <span style={{ fontSize: 10.5, color: C.muted }}>dispara a checagem na hora, sem esperar o agendador</span>
+          </div>
+          {testMsg && <div style={{ fontSize: 11, color: C.inkSoft }}>{testMsg}</div>}
         </div>
       )}
 

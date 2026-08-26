@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireMaster } from "../middleware/auth.js";
 import { sendInviteEmail } from "../lib/mailer.js";
 import { MAX_TEAM_SIZE } from "./auth.js";
+import { runFollowUpCheck } from "../jobs/followUp.js";
 
 const router = Router();
 
@@ -34,13 +35,25 @@ router.patch("/phone", async (req, res) => {
 });
 
 // Apenas o Master ajusta depois de quantos dias parado um lead gera lembrete automático.
+// 0 é permitido só para teste — considera qualquer lead parado como pronto para alertar na hora.
 router.patch("/followup-settings", requireMaster, async (req, res) => {
   const days = Number(req.body.followUpDays);
-  if (!Number.isInteger(days) || days < 1 || days > 30) {
-    return res.status(400).json({ error: "Informe um número de dias entre 1 e 30." });
+  if (!Number.isInteger(days) || days < 0 || days > 30) {
+    return res.status(400).json({ error: "Informe um número de dias entre 0 e 30." });
   }
   await prisma.organization.update({ where: { id: req.organizationId }, data: { followUpDays: days } });
   res.json({ ok: true });
+});
+
+// Apenas o Master pode disparar a checagem de follow-up manualmente, sem esperar o agendador automático.
+router.post("/followup-test", requireMaster, async (req, res) => {
+  try {
+    const result = await runFollowUpCheck();
+    res.json(result);
+  } catch (e) {
+    console.error("[followup-test] falha:", e);
+    res.status(500).json({ error: "Falha ao rodar a checagem. Veja os logs do servidor." });
+  }
 });
 
 // Apenas o Master convida novos membros.
