@@ -11,13 +11,23 @@ function startOfMonth() {
 }
 
 /**
- * Varre todas as organizações com Vendas/Completo ativo e envia lembrete
- * automático de follow-up para leads parados. Reaproveitável tanto como
- * chamada em processo (agendador leve dentro do done-api) quanto via CLI.
+ * Varre organizações com Vendas/Completo ativo e envia lembrete automático de
+ * follow-up para leads parados. Reaproveitável tanto como chamada em processo
+ * (agendador leve dentro do done-api) quanto via CLI.
+ *
+ * options.organizationId: restringe a checagem a uma única organização (usado
+ * pelo botão "Testar agora" do Master).
+ * options.skipPlanCheck: ignora a exigência de assinatura ativa — só faz
+ * sentido combinado com organizationId, para teste manual autenticado.
  */
-export async function runFollowUpCheck() {
+export async function runFollowUpCheck(options = {}) {
+  const { organizationId = null, skipPlanCheck = false } = options;
+
   const orgs = await prisma.organization.findMany({
-    where: { subscriptions: { some: { status: "active", module: { in: ["vendas", "completo"] } } } },
+    where: {
+      ...(organizationId ? { id: organizationId } : {}),
+      ...(skipPlanCheck ? {} : { subscriptions: { some: { status: "active", module: { in: ["vendas", "completo"] } } } }),
+    },
     select: { id: true, name: true, followUpDays: true },
   });
 

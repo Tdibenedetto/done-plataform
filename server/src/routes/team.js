@@ -46,9 +46,10 @@ router.patch("/followup-settings", requireMaster, async (req, res) => {
 });
 
 // Apenas o Master pode disparar a checagem de follow-up manualmente, sem esperar o agendador automático.
+// Verifica só a própria organização e ignora a exigência de assinatura ativa (é um teste manual autenticado).
 router.post("/followup-test", requireMaster, async (req, res) => {
   try {
-    const result = await runFollowUpCheck();
+    const result = await runFollowUpCheck({ organizationId: req.organizationId, skipPlanCheck: true });
     res.json(result);
   } catch (e) {
     console.error("[followup-test] falha:", e);
