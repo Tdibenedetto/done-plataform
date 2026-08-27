@@ -43,6 +43,14 @@ export default function Credito() {
     }
   }
 
+  // Igual a toggleMonitoring, mas a partir de qualquer item da lista do Histórico
+  // (não precisa abrir o card pra ligar/desligar o monitoramento).
+  async function toggleMonitoringFor(item) {
+    const updated = await api.creditoSetMonitoring(item.id, !item.monitoring);
+    setHistory((prev) => prev.map((h) => (h.id === item.id ? updated : h)));
+    if (current?.id === item.id) setCurrent(updated);
+  }
+
   async function testMonitorNow() {
     setTestingMonitor(true);
     setMonitorTestMsg(null);
@@ -150,21 +158,31 @@ export default function Credito() {
 
       {showHistory && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14.5, marginBottom: 12 }}>Análises anteriores</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14.5, marginBottom: 4 }}>Análises anteriores</div>
+          <p style={{ fontSize: 11, color: C.muted, margin: "0 0 12px" }}>Clique no sino para ligar/desligar o monitoramento contínuo de cada CNPJ.</p>
           {history.length === 0 && <div style={{ fontSize: 12, color: C.muted }}>Nenhuma análise feita ainda.</div>}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {history.map((h) => (
-              <button key={h.id} onClick={() => setCurrent(h)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "none", border: "none", borderBottom: `1px solid ${C.border}`, padding: "8px 0", cursor: "pointer", textAlign: "left", width: "100%" }}>
-                <div>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>{h.companyName || h.cnpj}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>{h.requestedBy?.name} · {new Date(h.createdAt).toLocaleDateString("pt-BR")}</div>
-                </div>
-                {h.status && (
-                  <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 999, background: h.status === "aprovado" ? C.sageSoft : C.dangerSoft, color: h.status === "aprovado" ? C.sage : C.danger }}>
-                    {h.status === "aprovado" ? "Aprovado" : "Reprovado"}
-                  </span>
-                )}
-              </button>
+              <div key={h.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.border}`, padding: "8px 0" }}>
+                <button onClick={() => setCurrent(h)} style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", cursor: "pointer", textAlign: "left", flex: 1, minWidth: 0 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>{h.companyName || h.cnpj}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{h.requestedBy?.name} · {new Date(h.createdAt).toLocaleDateString("pt-BR")}</div>
+                  </div>
+                  {h.status && (
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 999, background: h.status === "aprovado" ? C.sageSoft : C.dangerSoft, color: h.status === "aprovado" ? C.sage : C.danger, flexShrink: 0 }}>
+                      {h.status === "aprovado" ? "Aprovado" : "Reprovado"}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => toggleMonitoringFor(h)}
+                  title={h.monitoring ? "Desativar monitoramento" : "Ativar monitoramento"}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: "4px 8px", flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}
+                >
+                  {h.monitoring ? <Bell size={15} color={C.gold} /> : <BellOff size={15} color={C.muted} />}
+                </button>
+              </div>
             ))}
           </div>
         </div>
