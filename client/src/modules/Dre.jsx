@@ -37,6 +37,7 @@ export default function Dre() {
   const [pullingGestao, setPullingGestao] = useState(false);
   const [error, setError] = useState(null);
   const [locked, setLocked] = useState(null); // mensagem de bloqueio, se a org não tem o add-on ativo
+  const [granting, setGranting] = useState(false);
 
   async function reload() {
     const r = await api.dreList();
@@ -47,6 +48,20 @@ export default function Dre() {
   useEffect(() => {
     reload().catch((e) => setLocked(e.message));
   }, []);
+
+  async function grantTestAccess() {
+    setGranting(true);
+    try {
+      await api.teamGrantTestAccess(["gestao", "dre"]);
+      setLocked(null);
+      setEntries(null);
+      await reload();
+    } catch (e) {
+      setLocked(e.message);
+    } finally {
+      setGranting(false);
+    }
+  }
 
   const monthEntries = useMemo(() => (entries || []).filter((e) => e.month === month), [entries, month]);
 
@@ -142,6 +157,9 @@ export default function Dre() {
         <div style={{ border: `1.5px dashed ${C.border}`, borderRadius: 14, padding: 32, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
           <Wallet size={24} color={C.gold} />
           <div style={{ fontSize: 13.5, color: C.inkSoft, maxWidth: 380 }}>{locked}</div>
+          <button style={S.ghostBtn} disabled={granting} onClick={grantTestAccess}>
+            {granting ? "Liberando..." : "Liberar acesso de teste (sem cobrar)"}
+          </button>
         </div>
       </div>
     );

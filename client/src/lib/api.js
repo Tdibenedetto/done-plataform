@@ -90,6 +90,7 @@ Object.assign(api, {
   teamSetPhone: (phone) => request("/team/phone", { method: "PATCH", body: { phone } }),
   teamSetFollowupDays: (followUpDays) => request("/team/followup-settings", { method: "PATCH", body: { followUpDays } }),
   teamFollowupTest: () => request("/team/followup-test", { method: "POST" }),
+  teamGrantTestAccess: (modules) => request("/team/grant-test-access", { method: "POST", body: { modules } }),
   dreList: () => request("/dre"),
   dreAdd: (data) => request("/dre", { method: "POST", body: data }),
   dreDelete: (id) => request(`/dre/${id}`, { method: "DELETE" }),

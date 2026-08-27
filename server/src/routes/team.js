@@ -57,6 +57,28 @@ router.post("/followup-test", requireMaster, async (req, res) => {
   }
 });
 
+// Concede acesso de TESTE a módulos pagos (sem passar pelo Stripe) — só para o Master testar
+// funcionalidades pagas na própria conta antes de liberar de verdade via checkout.
+const TESTABLE_MODULES = ["vendas", "gestao", "completo", "whatsapp", "dre"];
+router.post("/grant-test-access", requireMaster, async (req, res) => {
+  const modules = Array.isArray(req.body.modules) ? req.body.modules.filter((m) => TESTABLE_MODULES.includes(m)) : [];
+  if (!modules.length) return res.status(400).json({ error: "Informe pelo menos um módulo válido." });
+
+  for (const module of modules) {
+    const existing = await prisma.subscription.findFirst({ where: { organizationId: req.organizationId, module, status: "active" } });
+    if (!existing) {
+      await prisma.subscription.create({
+        data: { organizationId: req.organizationId, module, status: "active", stripeSubscriptionId: null },
+      });
+    }
+  }
+  if (modules.some((m) => ["vendas", "gestao", "completo"].includes(m))) {
+    const basePlan = modules.find((m) => ["vendas", "gestao", "completo"].includes(m));
+    await prisma.organization.update({ where: { id: req.organizationId }, data: { plan: basePlan } });
+  }
+  res.json({ ok: true, granted: modules });
+});
+
 // Apenas o Master convida novos membros.
 router.post("/invite", requireMaster, async (req, res) => {
   const { email } = req.body;
