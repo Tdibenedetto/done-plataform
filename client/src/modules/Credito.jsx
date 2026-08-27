@@ -15,6 +15,7 @@ export default function Credito() {
   const [current, setCurrent] = useState(null); // análise ativa sendo trabalhada
   const [uploadingBalanco, setUploadingBalanco] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [granting, setGranting] = useState(false);
 
   async function reload() {
     try {
@@ -25,6 +26,20 @@ export default function Credito() {
     }
   }
   useEffect(() => { reload(); }, []);
+
+  async function grantTestAccess() {
+    setGranting(true);
+    try {
+      await api.teamGrantTestAccess(["gestao"]);
+      setLocked(false);
+      setHistory(null);
+      await reload();
+    } catch (e) {
+      setLockMessage(e.message);
+    } finally {
+      setGranting(false);
+    }
+  }
 
   async function buscarCnpj() {
     setError(null);
@@ -66,6 +81,9 @@ export default function Credito() {
           </div>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>Análise de Crédito</div>
           <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>{lockMessage || "Este recurso é exclusivo para assinantes de Vendas, Gestão ou do Pacote Completo."}</p>
+          <button style={S.ghostBtn} disabled={granting} onClick={grantTestAccess}>
+            {granting ? "Liberando..." : "Liberar acesso de teste (sem cobrar)"}
+          </button>
         </div>
       </div>
     );
