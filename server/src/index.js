@@ -16,6 +16,7 @@ import chatRoutes from "./routes/chat.js";
 import dreRoutes from "./routes/dre.js";
 import { requireAuth } from "./middleware/auth.js";
 import { runFollowUpCheck } from "./jobs/followUp.js";
+import { runCnpjMonitorCheck } from "./jobs/monitorCnpj.js";
 
 const app = express();
 
@@ -45,6 +46,25 @@ app.use((req, res, next) => {
     runFollowUpCheck()
       .catch((e) => console.error("[followup] falha na checagem em background:", e))
       .finally(() => { followUpRunning = false; });
+  }
+  next();
+});
+
+// -------- Agendador leve do monitoramento contínuo de CNPJ --------
+// Mesma técnica do follow-up acima — situação cadastral muda raramente, então o
+// próprio job só reconsulta CNPJs que já passaram do intervalo de 7 dias.
+const CNPJ_MONITOR_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // dispara a checagem no máximo 1x por dia
+let lastCnpjMonitorCheck = 0;
+let cnpjMonitorRunning = false;
+
+app.use((req, res, next) => {
+  const now = Date.now();
+  if (!cnpjMonitorRunning && now - lastCnpjMonitorCheck > CNPJ_MONITOR_MIN_INTERVAL_MS) {
+    cnpjMonitorRunning = true;
+    lastCnpjMonitorCheck = now;
+    runCnpjMonitorCheck()
+      .catch((e) => console.error("[cnpj-monitor] falha na checagem em background:", e))
+      .finally(() => { cnpjMonitorRunning = false; });
   }
   next();
 });

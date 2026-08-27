@@ -80,6 +80,8 @@ Object.assign(api, {
     form.append("file", file);
     return request(`/credito/${id}/balanco`, { method: "POST", body: form, isForm: true });
   },
+  creditoSetMonitoring: (id, monitoring) => request(`/credito/${id}/monitoring`, { method: "PATCH", body: { monitoring } }),
+  creditoMonitorTest: () => request("/credito/monitor-test", { method: "POST" }),
   chatThread: () => request("/chat/thread"),
   chatSend: (content) => request("/chat/message", { method: "POST", body: { content } }),
   chatEscalate: () => request("/chat/escalate", { method: "POST" }),

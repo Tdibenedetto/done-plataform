@@ -2,7 +2,8 @@ import { Router } from "express";
 import multer from "multer";
 import { prisma } from "../lib/prisma.js";
 import { extractFinancials } from "../lib/claude.js";
-import { requirePaidModule } from "../middleware/auth.js";
+import { requirePaidModule, requireMaster } from "../middleware/auth.js";
+import { runCnpjMonitorCheck } from "../jobs/monitorCnpj.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -44,10 +45,32 @@ function avaliarCredito(f) {
 router.get("/", async (req, res) => {
   const analyses = await prisma.creditAnalysis.findMany({
     where: { organizationId: req.organizationId },
-    include: { requestedBy: { select: { name: true } } },
+    include: { requestedBy: { select: { name: true } }, alerts: { orderBy: { createdAt: "desc" } } },
     orderBy: { createdAt: "desc" },
   });
   res.json(analyses);
+});
+
+// Liga/desliga o monitoramento contínuo de um CNPJ já consultado.
+router.patch("/:id/monitoring", async (req, res) => {
+  const analysis = await prisma.creditAnalysis.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
+  if (!analysis) return res.status(404).json({ error: "Análise não encontrada." });
+  const updated = await prisma.creditAnalysis.update({
+    where: { id: analysis.id },
+    data: { monitoring: !!req.body.monitoring, lastCheckedAt: req.body.monitoring ? new Date() : analysis.lastCheckedAt },
+  });
+  res.json(updated);
+});
+
+// Apenas o Master pode disparar a checagem de monitoramento manualmente, sem esperar o agendador.
+router.post("/monitor-test", requireMaster, async (req, res) => {
+  try {
+    const result = await runCnpjMonitorCheck({ organizationId: req.organizationId, skipInterval: true });
+    res.json(result);
+  } catch (e) {
+    console.error("[monitor-test] falha:", e);
+    res.status(500).json({ error: "Falha ao rodar a checagem. Veja os logs do servidor." });
+  }
 });
 
 router.post("/cnpj", async (req, res) => {

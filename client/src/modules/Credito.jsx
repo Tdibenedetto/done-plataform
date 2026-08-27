@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { CreditCard, Search, Upload, CheckCircle2, XCircle, Building2, History } from "lucide-react";
+import { CreditCard, Search, Upload, CheckCircle2, XCircle, Building2, History, Bell, BellOff, AlertTriangle } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
-import { api } from "../lib/api.js";
+import { api, loadSession } from "../lib/api.js";
 
 const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
@@ -16,6 +16,10 @@ export default function Credito() {
   const [uploadingBalanco, setUploadingBalanco] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [granting, setGranting] = useState(false);
+  const [togglingMonitor, setTogglingMonitor] = useState(false);
+  const [testingMonitor, setTestingMonitor] = useState(false);
+  const [monitorTestMsg, setMonitorTestMsg] = useState(null);
+  const isMaster = loadSession()?.user?.role === "master";
 
   async function reload() {
     try {
@@ -26,6 +30,36 @@ export default function Credito() {
     }
   }
   useEffect(() => { reload(); }, []);
+
+  async function toggleMonitoring() {
+    if (!current) return;
+    setTogglingMonitor(true);
+    try {
+      const updated = await api.creditoSetMonitoring(current.id, !current.monitoring);
+      setCurrent(updated);
+      reload();
+    } finally {
+      setTogglingMonitor(false);
+    }
+  }
+
+  async function testMonitorNow() {
+    setTestingMonitor(true);
+    setMonitorTestMsg(null);
+    try {
+      const r = await api.creditoMonitorTest();
+      setMonitorTestMsg(`${r.checked} CNPJ(s) checado(s), ${r.changed} mudança(s) encontrada(s).`);
+      reload();
+      if (current) {
+        const fresh = (await api.creditoList()).find((h) => h.id === current.id);
+        if (fresh) setCurrent(fresh);
+      }
+    } catch (e) {
+      setMonitorTestMsg(e.message);
+    } finally {
+      setTestingMonitor(false);
+    }
+  }
 
   async function grantTestAccess() {
     setGranting(true);
@@ -98,8 +132,17 @@ export default function Credito() {
           <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, margin: 0 }}>Análise de Crédito</h2>
           <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>Consulte o CNPJ e, se quiser, analise o balanço para sugestão de limite.</p>
         </div>
-        <button style={S.ghostBtn} onClick={() => setShowHistory((s) => !s)}><History size={14} /> Histórico</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          {isMaster && (
+            <button style={S.ghostBtn} disabled={testingMonitor} onClick={testMonitorNow}>
+              {testingMonitor ? "Checando..." : "Testar monitoramento agora"}
+            </button>
+          )}
+          <button style={S.ghostBtn} onClick={() => setShowHistory((s) => !s)}><History size={14} /> Histórico</button>
+        </div>
       </div>
+
+      {monitorTestMsg && <div style={{ fontSize: 12, color: C.inkSoft }}>{monitorTestMsg}</div>}
 
       <div style={{ background: C.goldSoft, borderRadius: 10, padding: "10px 14px", fontSize: 11.5, color: C.inkSoft, lineHeight: 1.5 }}>
         ⚠️ Esta é uma análise interna, baseada em dados públicos da Receita Federal e nos números do balanço enviado — <strong>não é uma consulta a birô de crédito oficial</strong> (Serasa, Boa Vista). Use como apoio à decisão, não como resposta definitiva.
@@ -157,6 +200,31 @@ export default function Credito() {
               <div><span style={{ color: C.muted }}>Aberta em: </span><strong>{current.dataAbertura ? new Date(current.dataAbertura).toLocaleDateString("pt-BR") : "—"}</strong></div>
               <div style={{ gridColumn: "1 / -1" }}><span style={{ color: C.muted }}>Atividade: </span><strong>{current.atividade || "—"}</strong></div>
             </div>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 12, color: C.inkSoft, display: "flex", alignItems: "center", gap: 6 }}>
+                {current.monitoring ? <Bell size={13} color={C.gold} /> : <BellOff size={13} color={C.muted} />}
+                Monitoramento contínuo {current.monitoring ? "ativo" : "desativado"}
+                {current.monitoring && current.lastCheckedAt && (
+                  <span style={{ color: C.muted }}>· última checagem {new Date(current.lastCheckedAt).toLocaleDateString("pt-BR")}</span>
+                )}
+              </div>
+              <button style={S.ghostBtn} disabled={togglingMonitor} onClick={toggleMonitoring}>
+                {togglingMonitor ? "..." : current.monitoring ? "Desativar" : "Monitorar este CNPJ"}
+              </button>
+            </div>
+
+            {current.alerts?.length > 0 && (
+              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+                {current.alerts.map((a) => (
+                  <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 11.5, color: C.inkSoft, background: C.dangerSoft, borderRadius: 8, padding: "8px 10px" }}>
+                    <AlertTriangle size={13} color={C.danger} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>Situação mudou de <strong>{a.previousSituacao || "—"}</strong> para <strong>{a.newSituacao}</strong> em {new Date(a.createdAt).toLocaleDateString("pt-BR")}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <button style={{ ...S.ghostBtn, marginTop: 14, fontSize: 11.5 }} onClick={() => { setCurrent(null); setError(null); }}>← Nova consulta</button>
           </div>
 

@@ -28,6 +28,7 @@ model Organization {
   followUpAlerts FollowUpAlert[]
   dreEntries     DreEntry[]
   dreSaldoInicial Float @default(0) // saldo de caixa inicial, usado como base do fluxo de caixa acumulado
+  creditAlerts   CreditAlert[]
 }
 
 model User {
@@ -184,6 +185,10 @@ model CreditAnalysis {
   limiteSugerido Float?
   motivoRecusa   String?
 
+  monitoring    Boolean   @default(false) // acompanhar mudanças de situação cadastral automaticamente
+  lastCheckedAt DateTime?
+  alerts        CreditAlert[]
+
   createdAt DateTime @default(now())
 
   @@index([organizationId])
@@ -266,5 +271,21 @@ model DreEntry {
 
   @@index([organizationId])
   @@index([organizationId, month])
+}
+
+model CreditAlert {
+  id               String        @id @default(uuid())
+  organizationId   String
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creditAnalysisId String
+  creditAnalysis   CreditAnalysis @relation(fields: [creditAnalysisId], references: [id], onDelete: Cascade)
+  cnpj             String
+  companyName      String?
+  previousSituacao String?
+  newSituacao      String?
+  createdAt        DateTime      @default(now())
+
+  @@index([organizationId])
+  @@index([creditAnalysisId])
 }
 
