@@ -277,12 +277,24 @@ Cada "acoes" deve ter exatamente 3 itens, concretos e específicos para essa emp
   try {
     const res = await client.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 2200,
+      max_tokens: 4000,
       messages: [{ role: "user", content: prompt }],
     });
     const text = res.content.find((b) => b.type === "text")?.text || "";
-    const clean = text.replace(/```json|```/g, "").trim();
-    return JSON.parse(clean);
+    let clean = text.replace(/```json|```/g, "").trim();
+    // Se a IA adicionar qualquer texto antes/depois do JSON, extrai só o objeto.
+    const first = clean.indexOf("{");
+    const last = clean.lastIndexOf("}");
+    if (first >= 0 && last > first) clean = clean.slice(first, last + 1);
+
+    const parsed = JSON.parse(clean);
+    const dims = ["processo", "preco", "time", "pipeline"];
+    const valid = parsed?.resumoExecutivo && parsed?.dimensoes && dims.every((k) => parsed.dimensoes[k]?.analise && Array.isArray(parsed.dimensoes[k]?.acoes));
+    if (!valid) {
+      console.error("[claude] resposta do coach veio em formato inesperado:", JSON.stringify(parsed).slice(0, 300));
+      return null;
+    }
+    return parsed;
   } catch (e) {
     console.error("[claude] falha ao gerar análise do coach:", e.message);
     return null;
