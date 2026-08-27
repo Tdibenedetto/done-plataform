@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Plus, Trash2, Wallet, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, Trash2, Wallet, TrendingUp, TrendingDown, Upload } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
 import { api } from "../lib/api.js";
 
@@ -35,6 +35,8 @@ export default function Dre() {
   const [saldoDraft, setSaldoDraft] = useState("");
   const [savingSaldo, setSavingSaldo] = useState(false);
   const [pullingGestao, setPullingGestao] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState(null);
   const [error, setError] = useState(null);
   const [locked, setLocked] = useState(null); // mensagem de bloqueio, se a org não tem o add-on ativo
   const [granting, setGranting] = useState(false);
@@ -148,6 +150,28 @@ export default function Dre() {
     }
   }
 
+  async function handleUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    setUploadMsg(null);
+    try {
+      const r = await api.dreUpload(file);
+      setUploadMsg(
+        r.autoMapped
+          ? `${r.imported} lançamento(s) importado(s) — colunas identificadas automaticamente pela IA.${r.skipped ? ` ${r.skipped} linha(s) ignorada(s) por falta de mês/valor.` : ""}`
+          : `${r.imported} lançamento(s) importado(s).${r.skipped ? ` ${r.skipped} linha(s) ignorada(s) por falta de mês/valor.` : ""}`
+      );
+      await reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
+
   if (locked) {
     return (
       <div style={S.moduleCol}>
@@ -181,6 +205,15 @@ export default function Dre() {
         <button style={S.ghostBtn} disabled={pullingGestao} onClick={pullFromGestao}>
           {pullingGestao ? "Puxando..." : "Puxar faturamento da Gestão"}
         </button>
+        <label style={{ ...S.ghostBtn, cursor: "pointer" }}>
+          <Upload size={14} /> {uploading ? "Enviando..." : "Subir planilha"}
+          <input type="file" accept=".csv" onChange={handleUpload} style={{ display: "none" }} disabled={uploading} />
+        </label>
+      </div>
+
+      {uploadMsg && <div style={{ fontSize: 12, color: C.sage }}>{uploadMsg}</div>}
+      <div style={{ fontSize: 11, color: C.muted, marginTop: -8 }}>
+        Aceita CSV em qualquer formato — a IA identifica as colunas. Se preferir montar na mão, use as colunas: mes, tipo (receita/cmv/despesa/imposto), categoria, valor.
       </div>
 
       {error && <div style={{ fontSize: 12, color: C.danger }}>{error}</div>}

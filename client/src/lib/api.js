@@ -92,6 +92,11 @@ Object.assign(api, {
   teamFollowupTest: () => request("/team/followup-test", { method: "POST" }),
   teamGrantTestAccess: (modules) => request("/team/grant-test-access", { method: "POST", body: { modules } }),
   dreList: () => request("/dre"),
+  dreUpload: (file) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request("/dre/upload", { method: "POST", body: form, isForm: true });
+  },
   dreAdd: (data) => request("/dre", { method: "POST", body: data }),
   dreDelete: (id) => request(`/dre/${id}`, { method: "DELETE" }),
   dreSetSaldoInicial: (saldoInicial) => request("/dre/saldo-inicial", { method: "PUT", body: { saldoInicial } }),

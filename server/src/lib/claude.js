@@ -98,6 +98,102 @@ export function normalizeEstoque(raw) {
   return "ok";
 }
 
+const DRE_FIELDS = ["mes", "tipo", "categoria", "valor"];
+
+/**
+ * Igual a mapSpreadsheetColumns, mas para o formato do DRE (mes, tipo de
+ * lançamento, categoria, valor) em vez do formato de vendas/estoque da Gestão.
+ */
+export async function mapDreColumns(headers, sampleRows) {
+  if (!client) return null;
+
+  const prompt = `Você mapeia colunas de planilhas financeiras (DRE / fluxo de caixa) de PMEs para um formato padrão.
+
+Campos padrão que precisamos identificar:
+- mes: mês/período do lançamento (pode ser uma data completa, "Agosto/2026", "08/2026", etc.)
+- tipo: tipo do lançamento — normalmente algo como receita, custo/CMV, despesa, imposto/tributo
+- categoria: descrição/categoria do lançamento (ex: "Aluguel", "Vendas de produtos", "Simples Nacional")
+- valor: valor em reais do lançamento (número)
+
+Cabeçalhos da planilha enviada: ${JSON.stringify(headers)}
+Três linhas de exemplo: ${JSON.stringify(sampleRows)}
+
+Responda APENAS com um JSON, sem markdown, sem texto antes ou depois, no formato:
+{"mes": "NomeDaColunaOriginal", "tipo": "...", "categoria": "...", "valor": "..."}
+
+Use null para qualquer campo que não tenha correspondência clara na planilha. Não invente nomes de coluna que não existem na lista de cabeçalhos.`;
+
+  try {
+    const res = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 400,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = res.content.find((b) => b.type === "text")?.text || "";
+    const clean = text.replace(/```json|```/g, "").trim();
+    const mapping = JSON.parse(clean);
+
+    const result = {};
+    for (const field of DRE_FIELDS) {
+      result[field] = mapping[field] && headers.includes(mapping[field]) ? mapping[field] : null;
+    }
+    return result;
+  } catch (e) {
+    console.error("[claude] falha ao mapear colunas do DRE:", e.message);
+    return null;
+  }
+}
+
+/**
+ * Como normalizeMes, mas devolve "AAAA-MM" (com ano) em vez de só a abreviação —
+ * o DRE precisa do ano porque acompanha caixa ao longo de vários anos.
+ * Quando não há ano identificável na célula, assume o ano corrente.
+ */
+export function normalizeMesAno(raw) {
+  if (raw === undefined || raw === null) return "";
+  const val = String(raw).trim();
+  const currentYear = new Date().getFullYear();
+
+  // data completa reconhecida pelo JS ("2026-08-15", "15/08/2026" em alguns locales)
+  const asDate = new Date(val);
+  if (!Number.isNaN(asDate.getTime()) && /\d{4}/.test(val)) {
+    return `${asDate.getFullYear()}-${String(asDate.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  // "AAAA-MM" ou "MM/AAAA" já prontos
+  let m = val.match(/^(\d{4})-(\d{1,2})$/);
+  if (m) return `${m[1]}-${m[2].padStart(2, "0")}`;
+  m = val.match(/^(\d{1,2})[\/-](\d{4})$/);
+  if (m) return `${m[2]}-${m[1].padStart(2, "0")}`;
+
+  // nome do mês por extenso, com ou sem ano ("Agosto/2026", "agosto")
+  const yearMatch = val.match(/\d{4}/);
+  const year = yearMatch ? yearMatch[0] : String(currentYear);
+  const fullIdx = MES_FULL_PT.findIndex((mo) => val.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(mo.normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
+  if (fullIdx >= 0) return `${year}-${String(fullIdx + 1).padStart(2, "0")}`;
+
+  // abreviação de 3 letras, com ou sem ano ("Ago/2026", "ago")
+  const abrevIdx = MES_ABBR.findIndex((mo) => mo.toLowerCase() === val.slice(0, 3).toLowerCase());
+  if (abrevIdx >= 0) return `${year}-${String(abrevIdx + 1).padStart(2, "0")}`;
+
+  // só o número do mês ("8", "08")
+  const num = Number(val);
+  if (!Number.isNaN(num) && num >= 1 && num <= 12) return `${currentYear}-${String(num).padStart(2, "0")}`;
+
+  return "";
+}
+
+/**
+ * Normaliza texto livre de "tipo de lançamento" para os 4 tipos canônicos do DRE.
+ */
+export function normalizeDreType(raw) {
+  const val = String(raw || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (/receit|faturam|venda/.test(val)) return "receita";
+  if (/cmv|custo.*vari|custo.*mercadori/.test(val)) return "cmv";
+  if (/imposto|tribut|simples|icms|iss|pis|cofins/.test(val)) return "imposto";
+  return "despesa";
+}
+
 const PLATFORM_KNOWLEDGE = `Você é o assistente de suporte da plataforma D.O.N.E (Commercial Operating System), respondendo dúvidas de usuários dentro do próprio produto.
 
 Sobre a plataforma:
