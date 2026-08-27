@@ -95,6 +95,7 @@ Object.assign(api, {
   teamSetFollowupDays: (followUpDays) => request("/team/followup-settings", { method: "PATCH", body: { followUpDays } }),
   teamFollowupTest: () => request("/team/followup-test", { method: "POST" }),
   teamGrantTestAccess: (modules) => request("/team/grant-test-access", { method: "POST", body: { modules } }),
+  teamWeeklyReportTest: () => request("/team/weekly-report-test", { method: "POST" }),
   dreList: () => request("/dre"),
   dreUpload: (file) => {
     const form = new FormData();

@@ -17,6 +17,7 @@ import dreRoutes from "./routes/dre.js";
 import { requireAuth } from "./middleware/auth.js";
 import { runFollowUpCheck } from "./jobs/followUp.js";
 import { runCnpjMonitorCheck } from "./jobs/monitorCnpj.js";
+import { runWeeklyReportCheck } from "./jobs/weeklyReport.js";
 
 const app = express();
 
@@ -65,6 +66,23 @@ app.use((req, res, next) => {
     runCnpjMonitorCheck()
       .catch((e) => console.error("[cnpj-monitor] falha na checagem em background:", e))
       .finally(() => { cnpjMonitorRunning = false; });
+  }
+  next();
+});
+
+// -------- Agendador leve do relatório semanal por e-mail --------
+const WEEKLY_REPORT_MIN_INTERVAL_MS = 24 * 60 * 60 * 1000; // dispara a checagem no máximo 1x por dia
+let lastWeeklyReportCheck = 0;
+let weeklyReportRunning = false;
+
+app.use((req, res, next) => {
+  const now = Date.now();
+  if (!weeklyReportRunning && now - lastWeeklyReportCheck > WEEKLY_REPORT_MIN_INTERVAL_MS) {
+    weeklyReportRunning = true;
+    lastWeeklyReportCheck = now;
+    runWeeklyReportCheck()
+      .catch((e) => console.error("[weekly-report] falha na checagem em background:", e))
+      .finally(() => { weeklyReportRunning = false; });
   }
   next();
 });

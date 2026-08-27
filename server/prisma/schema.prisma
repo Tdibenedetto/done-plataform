@@ -12,6 +12,7 @@ model Organization {
   name      String
   plan      String?  // "vendas" | "gestao" | "completo" | null (sem assinatura ainda)
   followUpDays Int   @default(3) // dias sem atualização até disparar lembrete automático
+  lastWeeklyReportAt DateTime? // controla o envio do relatório semanal por e-mail (1x por semana)
   createdAt DateTime @default(now())
 
   users         User[]

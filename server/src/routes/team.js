@@ -5,6 +5,7 @@ import { requireMaster } from "../middleware/auth.js";
 import { sendInviteEmail } from "../lib/mailer.js";
 import { MAX_TEAM_SIZE } from "./auth.js";
 import { runFollowUpCheck } from "../jobs/followUp.js";
+import { runWeeklyReportCheck } from "../jobs/weeklyReport.js";
 
 const router = Router();
 
@@ -77,6 +78,17 @@ router.post("/grant-test-access", requireMaster, async (req, res) => {
     await prisma.organization.update({ where: { id: req.organizationId }, data: { plan: basePlan } });
   }
   res.json({ ok: true, granted: modules });
+});
+
+// Apenas o Master pode disparar o relatório semanal manualmente, sem esperar o agendador.
+router.post("/weekly-report-test", requireMaster, async (req, res) => {
+  try {
+    const result = await runWeeklyReportCheck({ organizationId: req.organizationId, skipInterval: true });
+    res.json(result);
+  } catch (e) {
+    console.error("[weekly-report-test] falha:", e);
+    res.status(500).json({ error: "Falha ao rodar a checagem. Veja os logs do servidor." });
+  }
 });
 
 // Apenas o Master convida novos membros.

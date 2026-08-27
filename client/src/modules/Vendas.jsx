@@ -811,6 +811,8 @@ function TeamPanel({ team, isMaster, onChange }) {
   const [savingDays, setSavingDays] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState(null);
+  const [testingWeekly, setTestingWeekly] = useState(false);
+  const [weeklyMsg, setWeeklyMsg] = useState(null);
 
   async function invite() {
     if (!email.trim()) return;
@@ -871,6 +873,19 @@ function TeamPanel({ team, isMaster, onChange }) {
     }
   }
 
+  async function runWeeklyTest() {
+    setTestingWeekly(true);
+    setWeeklyMsg(null);
+    try {
+      const r = await api.teamWeeklyReportTest();
+      setWeeklyMsg(r.sent > 0 ? "Relatório semanal enviado — confira o e-mail do Master." : "Checagem rodou, mas o e-mail não foi enviado (confira se o SMTP está configurado no servidor).");
+    } catch (e) {
+      setWeeklyMsg(e.message);
+    } finally {
+      setTestingWeekly(false);
+    }
+  }
+
   const slotsUsed = team.users.length + team.invites.length;
   const slotsLeft = team.maxTeamSize - slotsUsed;
 
@@ -905,6 +920,12 @@ function TeamPanel({ team, isMaster, onChange }) {
             <span style={{ fontSize: 10.5, color: C.muted }}>dispara a checagem na hora, sem esperar o agendador</span>
           </div>
           {testMsg && <div style={{ fontSize: 11, color: C.inkSoft }}>{testMsg}</div>}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+            <button style={{ ...S.ghostBtn, fontSize: 11.5 }} disabled={testingWeekly} onClick={runWeeklyTest}>{testingWeekly ? "Enviando..." : "Testar relatório semanal"}</button>
+            <span style={{ fontSize: 10.5, color: C.muted }}>envia o resumo por e-mail pro Master agora</span>
+          </div>
+          {weeklyMsg && <div style={{ fontSize: 11, color: C.inkSoft }}>{weeklyMsg}</div>}
         </div>
       )}
 
