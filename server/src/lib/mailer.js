@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 
-const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, CLIENT_URL } = process.env;
+const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, CLIENT_URL, RESEND_API_KEY, RESEND_FROM } = process.env;
 
 let transporter = null;
 if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
@@ -13,28 +13,49 @@ if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
     greetingTimeout: 10000,
     socketTimeout: 15000,
   });
-} else {
-  console.warn("[mailer] SMTP não configurado — convites vão gerar link, mas o e-mail não será enviado de verdade.");
+}
+
+if (!RESEND_API_KEY && !transporter) {
+  console.warn("[mailer] Nenhum provedor de e-mail configurado (RESEND_API_KEY ou SMTP_*) — convites vão gerar link, mas o e-mail não será enviado de verdade.");
+}
+
+/**
+ * Envia um e-mail. Prioriza o Resend (API via HTTPS — funciona em plataformas
+ * como o Render, que bloqueiam portas de saída SMTP no plano padrão). Cai para
+ * SMTP tradicional se o Resend não estiver configurado, para quem rodar a
+ * plataforma em outro lugar sem essa restrição.
+ */
+async function sendEmail({ to, subject, html }) {
+  if (RESEND_API_KEY) {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: RESEND_FROM || "D.O.N.E <onboarding@resend.dev>", to, subject, html }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Resend recusou o envio (${res.status}): ${body.slice(0, 200)}`);
+    }
+    return { sent: true };
+  }
+  if (transporter) {
+    await transporter.sendMail({ from: SMTP_FROM || SMTP_USER, to, subject, html });
+    return { sent: true };
+  }
+  console.log(`[mailer:disabled] e-mail para ${to} não enviado — nenhum provedor configurado. Assunto: ${subject}`);
+  return { sent: false };
 }
 
 export async function sendInviteEmail({ to, orgName, inviterName, token }) {
   const link = `${CLIENT_URL}/convite/${token}`;
-  if (!transporter) {
-    console.log(`[mailer:disabled] convite para ${to}: ${link}`);
-    return { sent: false, link };
-  }
-  await transporter.sendMail({
-    from: SMTP_FROM || SMTP_USER,
-    to,
-    subject: `${inviterName} te convidou para a equipe da ${orgName} no D.O.N.E`,
-    html: `
-      <p>Olá,</p>
-      <p><strong>${inviterName}</strong> te convidou para fazer parte do time de <strong>${orgName}</strong> na plataforma D.O.N.E.</p>
-      <p><a href="${link}">Clique aqui para criar sua conta</a></p>
-      <p>Se o link não funcionar, copie e cole este endereço no navegador:<br>${link}</p>
-    `,
-  });
-  return { sent: true, link };
+  const html = `
+    <p>Olá,</p>
+    <p><strong>${inviterName}</strong> te convidou para fazer parte do time de <strong>${orgName}</strong> na plataforma D.O.N.E.</p>
+    <p><a href="${link}">Clique aqui para criar sua conta</a></p>
+    <p>Se o link não funcionar, copie e cole este endereço no navegador:<br>${link}</p>
+  `;
+  const result = await sendEmail({ to, subject: `${inviterName} te convidou para a equipe da ${orgName} no D.O.N.E`, html });
+  return { ...result, link };
 }
 
 const INK = "#1C2130", GOLD = "#B8863A", SAGE = "#3B6B57", DANGER = "#A6462F", PAPER = "#FAF9F5", BORDER = "#E5E2D9", MUTED = "#6E7484";
@@ -92,11 +113,5 @@ export async function sendWeeklyReport({ to, orgName, data }) {
     </div>
   </div>`;
 
-  if (!transporter) {
-    console.log(`[mailer:disabled] relatório semanal para ${to} (${orgName}) não enviado — SMTP não configurado.`);
-    return { sent: false };
-  }
-  await transporter.sendMail({ from: SMTP_FROM || SMTP_USER, to, subject: `D.O.N.E — Resumo semanal de ${orgName}`, html });
-  return { sent: true };
+  return sendEmail({ to, subject: `D.O.N.E — Resumo semanal de ${orgName}`, html });
 }
-
