@@ -309,15 +309,26 @@ export default function ComercialCoach({ goTo, onResult }) {
 
 function UnlockedContent({ dimsArr, top3, result, onResultChange, history }) {
   const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState(null);
   const analysis = result?.detailedAnalysis || null;
 
+  function generateAnalysis() {
+    if (!result?.id) return;
+    setGenerating(true);
+    setGenerateError(null);
+    api.coachGenerateReport(result.id)
+      .then((updated) => {
+        onResultChange(updated);
+        if (!updated.detailedAnalysis) {
+          setGenerateError("Não conseguimos gerar a análise personalizada agora — mostrando a versão padrão.");
+        }
+      })
+      .catch((e) => setGenerateError(e.message || "Não conseguimos gerar a análise personalizada agora — mostrando a versão padrão."))
+      .finally(() => setGenerating(false));
+  }
+
   useEffect(() => {
-    if (result?.id && !result.detailedAnalysis) {
-      setGenerating(true);
-      api.coachGenerateReport(result.id)
-        .then((updated) => onResultChange(updated))
-        .finally(() => setGenerating(false));
-    }
+    if (result?.id && !result.detailedAnalysis) generateAnalysis();
   }, [result?.id]);
 
   const pastResults = history.filter((h) => h.createdAt !== result?.createdAt && h.id !== result?.id);
@@ -370,6 +381,14 @@ function UnlockedContent({ dimsArr, top3, result, onResultChange, history }) {
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15 }}>Análise detalhada por dimensão</div>
           {generating && <span style={{ fontSize: 11, color: C.muted }}>Gerando análise personalizada...</span>}
         </div>
+        {generateError && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11.5, color: C.danger }}>
+            <span>{generateError}</span>
+            <button onClick={generateAnalysis} disabled={generating} style={{ background: "none", border: "none", color: C.gold, fontWeight: 600, cursor: "pointer", fontSize: 11.5, textDecoration: "underline", padding: 0 }}>
+              Tentar de novo
+            </button>
+          </div>
+        )}
         {dimsArr.map((d) => (
           <div key={d.key} style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
