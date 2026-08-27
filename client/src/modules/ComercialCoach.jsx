@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
 import { RefreshCw, ArrowLeft } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
@@ -79,10 +80,11 @@ export default function ComercialCoach({ goTo, onResult }) {
   const [submitting, setSubmitting] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [checkingBilling, setCheckingBilling] = useState(true);
+  const [history, setHistory] = useState([]);
 
   useEffect(() => {
-    api.coachLatest()
-      .then((r) => { setResult(r); if (r) setStage("results"); })
+    Promise.all([api.coachLatest(), api.coachHistory().catch(() => [])])
+      .then(([r, h]) => { setResult(r); setHistory(h); if (r) setStage("results"); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -127,6 +129,7 @@ export default function ComercialCoach({ goTo, onResult }) {
     };
     const saved = await api.coachSubmit(payload);
     setResult(saved);
+    setHistory((h) => [...h, saved]);
     if (onResult) onResult(saved);
     setSubmitting(false);
     setStage("results");
@@ -137,14 +140,20 @@ export default function ComercialCoach({ goTo, onResult }) {
   if (loading) return <ModuleLoading />;
 
   if (stage === "landing") {
+    const last = history[history.length - 1];
     return (
       <div style={S.moduleCol}>
-        <div style={S.eyebrow}>DIAGNÓSTICO GRATUITO · 5–8 MIN</div>
+        <div style={S.eyebrow}>{last ? "REAVALIAÇÃO" : "DIAGNÓSTICO GRATUITO · 5–8 MIN"}</div>
         <h1 style={S.h1}>Descubra sua <span style={{ color: C.gold }}>Nota Comercial</span></h1>
         <p style={{ ...S.lead, maxWidth: 520 }}>
           Responda um questionário rápido sobre processo, precificação, time e estoque. No final, você recebe uma nota de 0 a 100 e as três prioridades para destravar o seu negócio.
         </p>
-        <button style={{ ...S.primaryBtn, marginTop: 8 }} onClick={() => setStage("segment")}>Começar diagnóstico →</button>
+        {last && (
+          <div style={{ background: C.goldSoft, borderRadius: 10, padding: "10px 14px", fontSize: 12.5, color: "#6B5122", maxWidth: 480 }}>
+            Sua última nota foi <strong>{last.final}</strong>, em {new Date(last.createdAt).toLocaleDateString("pt-BR")}. Reavaliar periodicamente (a cada trimestre, por exemplo) mostra a evolução real do negócio.
+          </div>
+        )}
+        <button style={{ ...S.primaryBtn, marginTop: 8 }} onClick={() => setStage("segment")}>{last ? "Reavaliar agora →" : "Começar diagnóstico →"}</button>
         <div style={{ display: "flex", gap: 28, marginTop: 20, paddingTop: 20, borderTop: `1px solid ${C.border}`, width: "100%", maxWidth: 480 }}>
           <TrustStat n="4" label="dimensões avaliadas" />
           <TrustStat n="0–100" label="nota final" />
@@ -280,7 +289,7 @@ export default function ComercialCoach({ goTo, onResult }) {
       </div>
 
       {!checkingBilling && (unlocked ? (
-        <UnlockedContent dimsArr={dimsArr} top3={top3} result={result} onResultChange={setResult} />
+        <UnlockedContent dimsArr={dimsArr} top3={top3} result={result} onResultChange={setResult} history={history} />
       ) : (
         <div style={{ background: C.ink, color: "#fff", borderRadius: 16, padding: 26, display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 18 }}>Relatório completo — R$ 147</div>
@@ -298,23 +307,78 @@ export default function ComercialCoach({ goTo, onResult }) {
   );
 }
 
-function UnlockedContent({ dimsArr, top3, result, onResultChange }) {
-  const avgScore = dimsArr.reduce((s, d) => s + d.score, 0) / dimsArr.length;
+function UnlockedContent({ dimsArr, top3, result, onResultChange, history }) {
+  const [generating, setGenerating] = useState(false);
+  const analysis = result?.detailedAnalysis || null;
+
+  useEffect(() => {
+    if (result?.id && !result.detailedAnalysis) {
+      setGenerating(true);
+      api.coachGenerateReport(result.id)
+        .then((updated) => onResultChange(updated))
+        .finally(() => setGenerating(false));
+    }
+  }, [result?.id]);
+
+  const pastResults = history.filter((h) => h.createdAt !== result?.createdAt && h.id !== result?.id);
+  const trendData = history.map((h) => ({
+    data: new Date(h.createdAt).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+    Nota: h.final,
+  }));
+  const previous = pastResults[pastResults.length - 1];
+  const delta = previous ? result.final - previous.final : null;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, color: C.sage, fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14 }}>
         ✓ Relatório completo desbloqueado
       </div>
 
+      {analysis?.resumoExecutivo && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, marginBottom: 8 }}>Resumo executivo</div>
+          <p style={{ fontSize: 13.5, color: C.inkSoft, lineHeight: 1.6, margin: 0 }}>{analysis.resumoExecutivo}</p>
+        </div>
+      )}
+
+      {history.length > 1 && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15 }}>Evolução ao longo do tempo</div>
+            {delta !== null && (
+              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 13, color: delta >= 0 ? C.sage : C.danger }}>
+                {delta >= 0 ? "+" : ""}{delta} pts desde {new Date(previous.createdAt).toLocaleDateString("pt-BR")}
+              </div>
+            )}
+          </div>
+          <div style={{ height: 140 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendData}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                <XAxis dataKey="data" tick={{ fontSize: 10.5, fill: C.muted }} axisLine={{ stroke: C.border }} tickLine={false} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: C.muted }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}` }} />
+                <Line type="monotone" dataKey="Nota" stroke={C.gold} strokeWidth={2} dot={{ r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22, display: "flex", flexDirection: "column", gap: 18 }}>
-        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15 }}>Análise detalhada por dimensão</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15 }}>Análise detalhada por dimensão</div>
+          {generating && <span style={{ fontSize: 11, color: C.muted }}>Gerando análise personalizada...</span>}
+        </div>
         {dimsArr.map((d) => (
           <div key={d.key} style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 13.5 }}>{d.label}</span>
               <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 13.5, color: C.gold }}>{Math.round(d.score)}</span>
             </div>
-            <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>{ANALYSIS_TEXT[d.key][tierOf(d.score)]}</p>
+            <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>
+              {analysis?.dimensoes?.[d.key]?.analise || ANALYSIS_TEXT[d.key][tierOf(d.score)]}
+            </p>
           </div>
         ))}
       </div>
@@ -327,15 +391,26 @@ function UnlockedContent({ dimsArr, top3, result, onResultChange }) {
 
       <div style={{ background: C.ink, borderRadius: 16, padding: 22, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15, color: "#fff" }}>Plano de ação completo</div>
-        {dimsArr.map((d, i) => (
-          <div key={d.key} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 12, color: C.gold, background: "rgba(184,134,58,0.15)", width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
-            <div>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: "#fff", marginBottom: 3 }}>{d.label}</div>
-              <p style={{ fontSize: 12.5, color: "#C7CAD4", lineHeight: 1.55, margin: 0 }}>{ACTION_TEXT[d.key]}</p>
+        {dimsArr.map((d, i) => {
+          const acoes = analysis?.dimensoes?.[d.key]?.acoes;
+          return (
+            <div key={d.key} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 12, color: C.gold, background: "rgba(184,134,58,0.15)", width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: "#fff", marginBottom: 3 }}>{d.label}</div>
+                {acoes ? (
+                  <ul style={{ margin: 0, paddingLeft: 16 }}>
+                    {acoes.map((a, j) => (
+                      <li key={j} style={{ fontSize: 12.5, color: "#C7CAD4", lineHeight: 1.55, marginBottom: 2 }}>{a}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p style={{ fontSize: 12.5, color: "#C7CAD4", lineHeight: 1.55, margin: 0 }}>{ACTION_TEXT[d.key]}</p>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

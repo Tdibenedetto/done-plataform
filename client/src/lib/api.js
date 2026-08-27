@@ -24,6 +24,8 @@ export const api = {
 
   coachSubmit: (data) => request("/coach/submit", { method: "POST", body: data }),
   coachLatest: () => request("/coach/latest"),
+  coachHistory: () => request("/coach/history"),
+  coachGenerateReport: (resultId) => request(`/coach/${resultId}/generate-report`, { method: "POST" }),
   coachTrackToggle: (resultId, itemKey, done) => request(`/coach/track/${resultId}`, { method: "PATCH", body: { itemKey, done } }),
 
   leadsList: () => request("/leads"),

@@ -227,6 +227,75 @@ export async function chatReply(history) {
     return "Tive um problema para responder agora. Tente de novo em instantes, ou toque em \"Falar com alguém do time de suporte\".";
   }
 }
+/**
+ * Gera a análise detalhada do relatório completo do Comercial Coach, em cima
+ * das respostas reais do questionário (não um texto genérico por faixa de nota).
+ * Retorna null se a IA não estiver configurada ou a resposta não puder ser lida —
+ * quem chama deve ter um fallback (texto estático) para esse caso.
+ */
+export async function generateCoachAnalysis({ segment, dims, final, answersWithLabels, previous }) {
+  if (!client) return null;
+
+  const dimsText = Object.entries(dims)
+    .map(([key, score]) => {
+      const label = DIMENSION_LABEL_PT[key];
+      const qas = (answersWithLabels[key] || [])
+        .map((a) => `  - "${a.q}" → respondeu: "${a.label}"`)
+        .join("\n");
+      return `${label} (nota ${Math.round(score)}/100):\n${qas}`;
+    })
+    .join("\n\n");
+
+  const trendText = previous
+    ? `\nEssa empresa já fez esse diagnóstico antes: nota anterior foi ${previous.final}/100 em ${new Date(previous.createdAt).toLocaleDateString("pt-BR")}. Comente brevemente a evolução (ou piora) no resumo executivo.`
+    : "";
+
+  const prompt = `Você é um consultor comercial sênior escrevendo a análise de um relatório pago (R$ 147) de diagnóstico comercial para uma PME brasileira do segmento "${segment === "b2b" ? "B2B/Atacado" : "Varejo Especializado"}".
+
+Nota comercial final: ${final}/100.
+
+Respostas do questionário, por dimensão:
+
+${dimsText}
+${trendText}
+
+Escreva uma análise honesta, específica e prática — nada de generalidades que serviriam para qualquer empresa. Cite as respostas reais que a empresa deu para justificar cada ponto. Tom de consultor experiente, direto, sem enrolação, mas sem soar agressivo.
+
+Responda APENAS com um JSON válido, sem markdown, sem texto antes ou depois, no formato exato:
+{
+  "resumoExecutivo": "2-3 frases resumindo o panorama geral da empresa, citando o que mais chama atenção (positivo ou negativo)",
+  "dimensoes": {
+    "processo": { "analise": "2-4 frases específicas citando as respostas dadas", "acoes": ["ação concreta 1", "ação concreta 2", "ação concreta 3"] },
+    "preco": { "analise": "...", "acoes": ["...", "...", "..."] },
+    "time": { "analise": "...", "acoes": ["...", "...", "..."] },
+    "pipeline": { "analise": "...", "acoes": ["...", "...", "..."] }
+  }
+}
+
+Cada "acoes" deve ter exatamente 3 itens, concretos e específicos para essa empresa (não genéricos), cada um em uma frase curta e acionável.`;
+
+  try {
+    const res = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2200,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = res.content.find((b) => b.type === "text")?.text || "";
+    const clean = text.replace(/```json|```/g, "").trim();
+    return JSON.parse(clean);
+  } catch (e) {
+    console.error("[claude] falha ao gerar análise do coach:", e.message);
+    return null;
+  }
+}
+
+const DIMENSION_LABEL_PT = {
+  processo: "Processo Comercial",
+  preco: "Precificação & Margem",
+  time: "Time & Performance",
+  pipeline: "Pipeline / Estoque",
+};
+
 export async function extractFinancials(pdfBase64) {
   if (!client) return null;
 

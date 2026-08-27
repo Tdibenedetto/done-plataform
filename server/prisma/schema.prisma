@@ -74,6 +74,8 @@ model CoachResult {
   dimTime        Float
   dimPipeline    Float
   final          Int
+  answers          Json?    // respostas brutas por dimensão, para gerar a análise detalhada com contexto real
+  detailedAnalysis Json?    // análise gerada por IA (cacheada — não regenera a cada visualização)
   trackProgress  Json?    @default("{}") // checklist da trilha de ação: { "processo-0": true, ... }
   createdAt      DateTime @default(now())
 
