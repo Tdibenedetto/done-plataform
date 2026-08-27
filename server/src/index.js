@@ -13,6 +13,7 @@ import alertsRoutes from "./routes/alerts.js";
 import teamRoutes from "./routes/team.js";
 import creditoRoutes from "./routes/credito.js";
 import chatRoutes from "./routes/chat.js";
+import dreRoutes from "./routes/dre.js";
 import { requireAuth } from "./middleware/auth.js";
 import { runFollowUpCheck } from "./jobs/followUp.js";
 
@@ -60,6 +61,7 @@ app.use("/api/alerts", requireAuth, alertsRoutes);
 app.use("/api/team", requireAuth, teamRoutes);
 app.use("/api/credito", requireAuth, creditoRoutes);
 app.use("/api/chat", requireAuth, chatRoutes);
+app.use("/api/dre", requireAuth, dreRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

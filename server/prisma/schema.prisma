@@ -26,6 +26,8 @@ model Organization {
   payments      Payment[]
   supportThreads SupportThread[]
   followUpAlerts FollowUpAlert[]
+  dreEntries     DreEntry[]
+  dreSaldoInicial Float @default(0) // saldo de caixa inicial, usado como base do fluxo de caixa acumulado
 }
 
 model User {
@@ -250,5 +252,19 @@ model FollowUpAlert {
 
   @@index([organizationId])
   @@index([leadId])
+}
+
+model DreEntry {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  month          String   // "2026-08" (ano-mês, evita ambiguidade entre anos)
+  type           String   // "receita" | "cmv" | "despesa" | "imposto"
+  category       String
+  amount         Float
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([organizationId, month])
 }
 

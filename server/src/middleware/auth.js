@@ -36,3 +36,20 @@ export async function requirePaidModule(req, res, next) {
   next();
 }
 
+// Exige um add-on pago específico (ex: "dre", "whatsapp"), além do plano base que o add-on requer.
+export function requireAddon(addonModule, baseModules) {
+  return async (req, res, next) => {
+    const [addon, base] = await Promise.all([
+      prisma.subscription.findFirst({ where: { organizationId: req.organizationId, status: "active", module: addonModule } }),
+      prisma.subscription.findFirst({ where: { organizationId: req.organizationId, status: "active", module: { in: baseModules } } }),
+    ]);
+    if (!base) {
+      return res.status(402).json({ error: `Este recurso exige uma assinatura ativa de ${baseModules.join(" ou ")}.` });
+    }
+    if (!addon) {
+      return res.status(402).json({ error: "Este recurso é um add-on pago à parte — assine para desbloquear." });
+    }
+    next();
+  };
+}
+
