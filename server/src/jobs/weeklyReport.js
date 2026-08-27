@@ -68,6 +68,7 @@ export async function runWeeklyReportCheck(options = {}) {
   });
 
   let sent = 0;
+  let lastError = null;
 
   for (const org of orgs) {
     const master = org.users[0];
@@ -79,12 +80,13 @@ export async function runWeeklyReportCheck(options = {}) {
       if (result.sent) sent += 1;
       await prisma.organization.update({ where: { id: org.id }, data: { lastWeeklyReportAt: new Date() } });
     } catch (e) {
+      lastError = e.message;
       console.error(`[weekly-report] falha ao montar/enviar relatório de ${org.name}:`, e.message);
     }
   }
 
   console.log(`[weekly-report] verificação concluída — ${sent} relatório(s) enviado(s) de ${orgs.length} organização(ões) verificada(s).`);
-  return { sent, orgsChecked: orgs.length };
+  return { sent, orgsChecked: orgs.length, error: organizationId ? lastError : null };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -878,7 +878,13 @@ function TeamPanel({ team, isMaster, onChange }) {
     setWeeklyMsg(null);
     try {
       const r = await api.teamWeeklyReportTest();
-      setWeeklyMsg(r.sent > 0 ? "Relatório semanal enviado — confira o e-mail do Master." : "Checagem rodou, mas o e-mail não foi enviado (confira se o SMTP está configurado no servidor).");
+      if (r.sent > 0) {
+        setWeeklyMsg("Relatório semanal enviado — confira o e-mail do Master.");
+      } else if (r.error) {
+        setWeeklyMsg(`Falha ao enviar: ${r.error}`);
+      } else {
+        setWeeklyMsg("Checagem rodou, mas o e-mail não foi enviado (confira se o SMTP está configurado no servidor).");
+      }
     } catch (e) {
       setWeeklyMsg(e.message);
     } finally {

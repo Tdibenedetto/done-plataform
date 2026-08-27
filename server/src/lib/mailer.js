@@ -9,6 +9,9 @@ if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
     port: Number(SMTP_PORT) || 587,
     secure: Number(SMTP_PORT) === 465,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
+    connectionTimeout: 10000, // 10s para conectar — sem isso, uma porta bloqueada trava a requisição indefinidamente
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 } else {
   console.warn("[mailer] SMTP não configurado — convites vão gerar link, mas o e-mail não será enviado de verdade.");
