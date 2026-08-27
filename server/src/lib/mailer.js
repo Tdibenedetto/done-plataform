@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 
-const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, CLIENT_URL, RESEND_API_KEY, RESEND_FROM } = process.env;
+const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, CLIENT_URL, RESEND_API_KEY, RESEND_FROM, SENDGRID_API_KEY, SENDGRID_FROM } = process.env;
 
 let transporter = null;
 if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
@@ -15,17 +15,37 @@ if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
   });
 }
 
-if (!RESEND_API_KEY && !transporter) {
-  console.warn("[mailer] Nenhum provedor de e-mail configurado (RESEND_API_KEY ou SMTP_*) — convites vão gerar link, mas o e-mail não será enviado de verdade.");
+if (!SENDGRID_API_KEY && !RESEND_API_KEY && !transporter) {
+  console.warn("[mailer] Nenhum provedor de e-mail configurado (SENDGRID_API_KEY, RESEND_API_KEY ou SMTP_*) — convites vão gerar link, mas o e-mail não será enviado de verdade.");
 }
 
 /**
- * Envia um e-mail. Prioriza o Resend (API via HTTPS — funciona em plataformas
- * como o Render, que bloqueiam portas de saída SMTP no plano padrão). Cai para
- * SMTP tradicional se o Resend não estiver configurado, para quem rodar a
- * plataforma em outro lugar sem essa restrição.
+ * Envia um e-mail. Prioriza SendGrid (API via HTTPS, verificação de domínio só
+ * com CNAME — funciona com DNS do Wix), depois Resend (também HTTPS, mas exige
+ * MX em subdomínio, incompatível com Wix), depois SMTP tradicional (bloqueado
+ * por portas de saída em plataformas como o Render, mas útil se rodar em outro lugar).
  */
 async function sendEmail({ to, subject, html }) {
+  if (SENDGRID_API_KEY) {
+    if (!SENDGRID_FROM) {
+      throw new Error("SENDGRID_FROM não configurado — defina um remetente verificado no SendGrid (ex: D.O.N.E <done@donestrategy.com>).");
+    }
+    const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SENDGRID_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: to }] }],
+        from: parseFromAddress(SENDGRID_FROM),
+        subject,
+        content: [{ type: "text/html", value: html }],
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`SendGrid recusou o envio (${res.status}): ${body.slice(0, 200)}`);
+    }
+    return { sent: true };
+  }
   if (RESEND_API_KEY) {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -44,6 +64,15 @@ async function sendEmail({ to, subject, html }) {
   }
   console.log(`[mailer:disabled] e-mail para ${to} não enviado — nenhum provedor configurado. Assunto: ${subject}`);
   return { sent: false };
+}
+
+// SendGrid quer { email, name } separados, não a string "Nome <email>" como Resend/nodemailer aceitam.
+function parseFromAddress(raw) {
+  const fallback = { email: "onboarding@resend.dev", name: "D.O.N.E" };
+  if (!raw) return fallback;
+  const match = raw.match(/^(.*?)\s*<(.+)>$/);
+  if (match) return { name: match[1].trim(), email: match[2].trim() };
+  return { email: raw.trim() };
 }
 
 export async function sendInviteEmail({ to, orgName, inviterName, token }) {
