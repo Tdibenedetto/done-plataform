@@ -167,3 +167,13 @@ export default function AdminOverview() {
 }
 
 const td = { padding: "12px 16px", borderBottom: `1px solid ${C.border}`, color: "#2A2E3A", whiteSpace: "nowrap" };
+
+function StatCard({ label, value, sub, color }) {
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "18px 20px" }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.02em", color: C.muted, textTransform: "uppercase" }}>{label}</div>
+      <div style={{ fontFamily: FONT_DISPLAY, fontSize: 30, fontWeight: 700, color: color || C.ink, marginTop: 8 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}

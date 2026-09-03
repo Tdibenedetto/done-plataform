@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { Component, useState, useEffect } from "react";
 import {
   Activity, Trello, BarChart2, LayoutGrid, Eye, EyeOff,
   ShieldCheck, Menu, X, ChevronRight, CreditCard, LifeBuoy, Wallet, Building2,
@@ -14,6 +14,25 @@ import AdminOverview from "./modules/AdminOverview.jsx";
 import Suporte from "./modules/Suporte.jsx";
 import Dre from "./modules/Dre.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
+
+// Evita que um erro de renderização em UM módulo derrube a tela inteira em branco —
+// mostra uma mensagem dentro da área de conteúdo, mantendo sidebar e navegação de pé.
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error("[ErrorBoundary]", error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 24, background: "#F3E1DB", border: "1px solid #A6462F", borderRadius: 12, color: "#A6462F" }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Algo deu errado ao carregar esta tela.</div>
+          <div style={{ fontSize: 13 }}>Tente novamente pelo menu lateral. Se persistir, avise o suporte.</div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   const [session, setSession] = useState(() => loadSession());
@@ -73,14 +92,16 @@ export default function App() {
       />
 
       <div className="done-content-wrap" style={S.content}>
-        {activeModule === "overview" && <VisaoGeral coachResult={coachResult} goTo={goTo} />}
-        {activeModule === "coach" && <ComercialCoach goTo={goTo} onResult={setCoachResult} />}
-        {activeModule === "vendas" && <FerramentaVendas />}
-        {activeModule === "gestao" && <FerramentaGestao />}
-        {activeModule === "credito" && <Credito />}
-        {activeModule === "suporte" && <Suporte />}
-        {activeModule === "dre" && <Dre />}
-        {activeModule === "admin" && <AdminOverview />}
+        <ErrorBoundary>
+          {activeModule === "overview" && <VisaoGeral coachResult={coachResult} goTo={goTo} />}
+          {activeModule === "coach" && <ComercialCoach goTo={goTo} onResult={setCoachResult} />}
+          {activeModule === "vendas" && <FerramentaVendas />}
+          {activeModule === "gestao" && <FerramentaGestao />}
+          {activeModule === "credito" && <Credito />}
+          {activeModule === "suporte" && <Suporte />}
+          {activeModule === "dre" && <Dre />}
+          {activeModule === "admin" && <AdminOverview />}
+        </ErrorBoundary>
       </div>
 
       <ChatWidget />
