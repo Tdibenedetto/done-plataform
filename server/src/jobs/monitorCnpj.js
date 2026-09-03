@@ -31,7 +31,7 @@ export async function runCnpjMonitorCheck(options = {}) {
       ...(organizationId ? { organizationId } : {}),
       ...(skipInterval ? {} : { OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lte: staleBefore } }] }),
       organization: {
-        subscriptions: { some: { status: "active", module: { in: ["vendas", "gestao", "completo"] } } },
+        subscriptions: { some: { status: { in: ["active", "trialing"] }, module: { in: ["vendas", "gestao", "completo"] } } },
       },
     },
   });

@@ -108,5 +108,6 @@ Object.assign(api, {
   adminOverview: () => request("/admin/overview"),
   adminClients: () => request("/admin/clients"),
   adminActivationRisk: () => request("/admin/activation-risk"),
+  adminGenerateTrialLink: (organizationId, product, trialDays) => request("/billing/admin-checkout-link", { method: "POST", body: { organizationId, product, trialDays } }),
 });
 

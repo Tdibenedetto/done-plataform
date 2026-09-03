@@ -30,9 +30,12 @@ router.get("/overview", async (req, res) => {
   let activeClients = 0;
   const revenueByModule = {};
   for (const org of orgs) {
-    const activeSubs = org.subscriptions.filter((s) => s.status === "active");
-    if (activeSubs.some((s) => BASE_MODULES.includes(s.module))) activeClients += 1;
-    for (const s of activeSubs) {
+    // Engajado = tem acesso liberado (pagando ou em teste). MRR só conta quem está PAGANDO de
+    // verdade — contar receita de quem está em trial infla o número com dinheiro que não existe ainda.
+    const payingSubs = org.subscriptions.filter((s) => s.status === "active");
+    const engagedSubs = org.subscriptions.filter((s) => s.status === "active" || s.status === "trialing");
+    if (engagedSubs.some((s) => BASE_MODULES.includes(s.module))) activeClients += 1;
+    for (const s of payingSubs) {
       const cents = PRICES[s.module]?.amountCents || 0;
       mrrCents += cents;
       revenueByModule[s.module] = (revenueByModule[s.module] || 0) + cents;
@@ -75,12 +78,19 @@ router.get("/clients", async (req, res) => {
   const clients = orgs.map((org) => {
     const master = org.users.find((u) => u.role === "master") || org.users[0] || null;
     const activeSubs = org.subscriptions.filter((s) => s.status === "active");
-    const baseSub = activeSubs.find((s) => BASE_MODULES.includes(s.module));
-    const addons = activeSubs.filter((s) => ADDON_MODULES.includes(s.module)).map((s) => ADDON_LABEL[s.module] || s.module);
+    const trialingSubs = org.subscriptions.filter((s) => s.status === "trialing");
+    const engagedSubs = [...activeSubs, ...trialingSubs];
+    const baseSub = engagedSubs.find((s) => BASE_MODULES.includes(s.module));
+    const addons = engagedSubs.filter((s) => ADDON_MODULES.includes(s.module)).map((s) => ADDON_LABEL[s.module] || s.module);
     const pastDueSub = org.subscriptions.find((s) => s.status === "past_due");
 
     const lastLogins = org.users.map((u) => u.lastLoginAt).filter(Boolean);
     const lastAccess = lastLogins.length ? new Date(Math.max(...lastLogins.map((d) => new Date(d).getTime()))) : null;
+
+    let paymentStatus = "inactive";
+    if (pastDueSub) paymentStatus = "past_due";
+    else if (baseSub?.status === "trialing") paymentStatus = "trialing";
+    else if (baseSub) paymentStatus = "active";
 
     return {
       organizationId: org.id,
@@ -93,8 +103,9 @@ router.get("/clients", async (req, res) => {
       usersActive: org.users.length,
       usersMax: MAX_TEAM_SIZE,
       memberSince: org.createdAt,
-      mrrCents: subsMrrCents(activeSubs),
-      paymentStatus: pastDueSub ? "past_due" : baseSub ? "active" : "inactive",
+      mrrCents: subsMrrCents(activeSubs), // só as pagantes de verdade — trial não soma aqui
+      paymentStatus,
+      trialEndsAt: baseSub?.status === "trialing" ? baseSub.currentPeriodEnd : null,
       lastAccess,
     };
   });
@@ -118,9 +129,9 @@ router.get("/activation-risk", async (req, res) => {
   const risk = [];
 
   for (const org of orgs) {
-    const activeSubs = org.subscriptions.filter((s) => s.status === "active");
+    const activeSubs = org.subscriptions.filter((s) => s.status === "active" || s.status === "trialing");
     const hasBase = activeSubs.some((s) => BASE_MODULES.includes(s.module));
-    if (!hasBase) continue; // sem assinatura ainda não é "risco", é só lead não convertido
+    if (!hasBase) continue; // sem assinatura (nem em teste) ainda não é "risco", é só lead não convertido
 
     const lastLogins = org.users.map((u) => u.lastLoginAt).filter(Boolean);
     const lastAccess = lastLogins.length ? new Date(Math.max(...lastLogins.map((d) => new Date(d).getTime()))) : null;

@@ -62,7 +62,7 @@ export async function runWeeklyReportCheck(options = {}) {
     where: {
       ...(organizationId ? { id: organizationId } : {}),
       ...(skipInterval ? {} : { OR: [{ lastWeeklyReportAt: null }, { lastWeeklyReportAt: { lte: staleBefore } }] }),
-      subscriptions: { some: { status: "active", module: { in: ["vendas", "gestao", "completo"] } } },
+      subscriptions: { some: { status: { in: ["active", "trialing"] }, module: { in: ["vendas", "gestao", "completo"] } } },
     },
     include: { users: { where: { role: "master" }, select: { email: true }, take: 1 } },
   });

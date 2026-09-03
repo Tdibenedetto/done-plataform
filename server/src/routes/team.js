@@ -1,7 +1,7 @@
 import { Router } from "express";
 import crypto from "crypto";
 import { prisma } from "../lib/prisma.js";
-import { requireMaster } from "../middleware/auth.js";
+import { requireMaster, requirePlatformAdmin } from "../middleware/auth.js";
 import { sendInviteEmail } from "../lib/mailer.js";
 import { MAX_TEAM_SIZE } from "./auth.js";
 import { runFollowUpCheck } from "../jobs/followUp.js";
@@ -58,10 +58,13 @@ router.post("/followup-test", requireMaster, async (req, res) => {
   }
 });
 
-// Concede acesso de TESTE a módulos pagos (sem passar pelo Stripe) — só para o Master testar
-// funcionalidades pagas na própria conta antes de liberar de verdade via checkout.
+// Concede acesso de TESTE a módulos pagos (sem passar pelo Stripe) — restrito ao Admin Geral.
+// Existia antes como ferramenta do próprio fundador para testar funcionalidades pagas na conta
+// dele mesmo antes do lançamento comercial; restrito a requireMaster, QUALQUER cliente master
+// conseguia chamar essa rota diretamente na própria conta e se autoliberar acesso pago de graça,
+// para sempre, sem passar pelo Stripe. Trocado para requirePlatformAdmin para fechar essa brecha.
 const TESTABLE_MODULES = ["vendas", "gestao", "completo", "whatsapp", "dre"];
-router.post("/grant-test-access", requireMaster, async (req, res) => {
+router.post("/grant-test-access", requirePlatformAdmin, async (req, res) => {
   const modules = Array.isArray(req.body.modules) ? req.body.modules.filter((m) => TESTABLE_MODULES.includes(m)) : [];
   if (!modules.length) return res.status(400).json({ error: "Informe pelo menos um módulo válido." });
 

@@ -20,6 +20,7 @@ export default function Credito() {
   const [testingMonitor, setTestingMonitor] = useState(false);
   const [monitorTestMsg, setMonitorTestMsg] = useState(null);
   const isMaster = loadSession()?.user?.role === "master";
+  const isPlatformAdmin = loadSession()?.user?.isPlatformAdmin;
 
   async function reload() {
     try {
@@ -123,9 +124,11 @@ export default function Credito() {
           </div>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>Análise de Crédito</div>
           <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>{lockMessage || "Este recurso é exclusivo para assinantes de Vendas, Gestão ou do Pacote Completo."}</p>
-          <button style={S.ghostBtn} disabled={granting} onClick={grantTestAccess}>
-            {granting ? "Liberando..." : "Liberar acesso de teste (sem cobrar)"}
-          </button>
+          {isPlatformAdmin && (
+            <button style={S.ghostBtn} disabled={granting} onClick={grantTestAccess}>
+              {granting ? "Liberando..." : "Liberar acesso de teste (sem cobrar)"}
+            </button>
+          )}
         </div>
       </div>
     );

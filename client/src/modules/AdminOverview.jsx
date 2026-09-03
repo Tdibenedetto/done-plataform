@@ -108,8 +108,8 @@ export default function AdminOverview() {
                   <td style={td}>{new Date(c.memberSince).toLocaleDateString("pt-BR", { month: "short", year: "numeric" })}</td>
                   <td style={{ ...td, fontFamily: FONT_DISPLAY, fontWeight: 700, color: C.ink }}>{fmtBRL(c.mrrCents)}</td>
                   <td style={td}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: "4px 9px", borderRadius: 99, background: c.paymentStatus === "past_due" ? C.dangerSoft : C.sageSoft, color: c.paymentStatus === "past_due" ? C.danger : C.sage }}>
-                      {c.paymentStatus === "past_due" ? "Atrasado" : c.paymentStatus === "active" ? "Em dia" : "—"}
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "4px 9px", borderRadius: 99, background: c.paymentStatus === "past_due" ? C.dangerSoft : c.paymentStatus === "trialing" ? C.goldSoft : C.sageSoft, color: c.paymentStatus === "past_due" ? C.danger : c.paymentStatus === "trialing" ? "#8A6423" : C.sage }}>
+                      {c.paymentStatus === "past_due" ? "Atrasado" : c.paymentStatus === "trialing" ? "Em teste" : c.paymentStatus === "active" ? "Em dia" : "—"}
                     </span>
                   </td>
                   <td style={td}>
@@ -125,6 +125,8 @@ export default function AdminOverview() {
           </table>
         </div>
       </div>
+
+      <TrialLinkGenerator clients={clients} />
 
       <div className="done-two-col-grid" style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 16 }}>
         <div style={S.qCard}>
@@ -174,6 +176,73 @@ function StatCard({ label, value, sub, color }) {
       <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.02em", color: C.muted, textTransform: "uppercase" }}>{label}</div>
       <div style={{ fontFamily: FONT_DISPLAY, fontSize: 30, fontWeight: 700, color: color || C.ink, marginTop: 8 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function TrialLinkGenerator({ clients }) {
+  const [organizationId, setOrganizationId] = useState("");
+  const [product, setProduct] = useState("completo");
+  const [days, setDays] = useState(14);
+  const [busy, setBusy] = useState(false);
+  const [url, setUrl] = useState(null);
+  const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  async function generate() {
+    if (!organizationId) { setError("Escolha um cliente."); return; }
+    setBusy(true); setError(null); setUrl(null); setCopied(false);
+    try {
+      const res = await api.adminGenerateTrialLink(organizationId, product, Number(days));
+      setUrl(res.url);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function copy() {
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div style={S.qCard}>
+      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14.5, color: C.ink }}>Gerar período de teste grátis</div>
+      <div style={{ fontSize: 12, color: C.muted, marginTop: -6 }}>Cria um link de checkout do Stripe com X dias de teste — o cliente só é cobrado depois. Envie o link por e-mail ou WhatsApp.</div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginTop: 4 }}>
+        <div style={{ flex: "2 1 220px" }}>
+          <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>Cliente</div>
+          <select style={S.input} value={organizationId} onChange={(e) => setOrganizationId(e.target.value)}>
+            <option value="">Selecione...</option>
+            {clients.map((c) => <option key={c.organizationId} value={c.organizationId}>{c.name}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: "1 1 160px" }}>
+          <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>Módulo</div>
+          <select style={S.input} value={product} onChange={(e) => setProduct(e.target.value)}>
+            <option value="completo">Pacote Completo</option>
+            <option value="vendas">Ferramenta de Vendas</option>
+            <option value="gestao">Ferramenta de Gestão</option>
+            <option value="whatsapp">Add-on: WhatsApp</option>
+            <option value="dre">Add-on: DRE</option>
+          </select>
+        </div>
+        <div style={{ flex: "0 1 90px" }}>
+          <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>Dias</div>
+          <input type="number" min={1} max={90} style={S.input} value={days} onChange={(e) => setDays(e.target.value)} />
+        </div>
+        <button style={S.primaryBtnSm} disabled={busy} onClick={generate}>{busy ? "Gerando..." : "Gerar link"}</button>
+      </div>
+      {error && <div style={{ fontSize: 12, color: C.danger }}>{error}</div>}
+      {url && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
+          <input style={{ ...S.input, flex: 1, fontSize: 11.5, color: C.inkSoft }} readOnly value={url} onFocus={(e) => e.target.select()} />
+          <button style={S.ghostBtn} onClick={copy}>{copied ? "Copiado!" : "Copiar"}</button>
+        </div>
+      )}
     </div>
   );
 }

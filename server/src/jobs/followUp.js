@@ -26,7 +26,7 @@ export async function runFollowUpCheck(options = {}) {
   const orgs = await prisma.organization.findMany({
     where: {
       ...(organizationId ? { id: organizationId } : {}),
-      ...(skipPlanCheck ? {} : { subscriptions: { some: { status: "active", module: { in: ["vendas", "completo"] } } } }),
+      ...(skipPlanCheck ? {} : { subscriptions: { some: { status: { in: ["active", "trialing"] }, module: { in: ["vendas", "completo"] } } } }),
     },
     select: { id: true, name: true, followUpDays: true },
   });

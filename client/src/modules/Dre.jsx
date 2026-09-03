@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Plus, Trash2, Wallet, TrendingUp, TrendingDown, Upload } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
-import { api } from "../lib/api.js";
+import { api, loadSession } from "../lib/api.js";
 
 const MES_ABBR = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -26,6 +26,7 @@ function last12Months() {
 }
 
 export default function Dre() {
+  const isPlatformAdmin = loadSession()?.user?.isPlatformAdmin;
   const months = useMemo(() => last12Months(), []);
   const [month, setMonth] = useState(months[months.length - 1].key);
   const [entries, setEntries] = useState(null);
@@ -181,9 +182,11 @@ export default function Dre() {
         <div style={{ border: `1.5px dashed ${C.border}`, borderRadius: 14, padding: 32, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
           <Wallet size={24} color={C.gold} />
           <div style={{ fontSize: 13.5, color: C.inkSoft, maxWidth: 380 }}>{locked}</div>
-          <button style={S.ghostBtn} disabled={granting} onClick={grantTestAccess}>
-            {granting ? "Liberando..." : "Liberar acesso de teste (sem cobrar)"}
-          </button>
+          {isPlatformAdmin && (
+            <button style={S.ghostBtn} disabled={granting} onClick={grantTestAccess}>
+              {granting ? "Liberando..." : "Liberar acesso de teste (sem cobrar)"}
+            </button>
+          )}
         </div>
       </div>
     );

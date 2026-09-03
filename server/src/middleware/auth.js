@@ -38,10 +38,10 @@ export async function requirePlatformAdmin(req, res, next) {
   next();
 }
 
-// Exige que a organização tenha uma assinatura ativa de Vendas, Gestão ou Completo.
+// Exige que a organização tenha uma assinatura ativa (ou em período de teste) de Vendas, Gestão ou Completo.
 export async function requirePaidModule(req, res, next) {
   const sub = await prisma.subscription.findFirst({
-    where: { organizationId: req.organizationId, status: "active", module: { in: ["vendas", "gestao", "completo"] } },
+    where: { organizationId: req.organizationId, status: { in: ["active", "trialing"] }, module: { in: ["vendas", "gestao", "completo"] } },
   });
   if (!sub) {
     return res.status(402).json({ error: "Este recurso é exclusivo para assinantes de Vendas, Gestão ou do Pacote Completo." });
@@ -50,11 +50,12 @@ export async function requirePaidModule(req, res, next) {
 }
 
 // Exige um add-on pago específico (ex: "dre", "whatsapp"), além do plano base que o add-on requer.
+// "trialing" conta como acesso liberado nos dois — um cliente em período de teste não pode ficar bloqueado.
 export function requireAddon(addonModule, baseModules) {
   return async (req, res, next) => {
     const [addon, base] = await Promise.all([
-      prisma.subscription.findFirst({ where: { organizationId: req.organizationId, status: "active", module: addonModule } }),
-      prisma.subscription.findFirst({ where: { organizationId: req.organizationId, status: "active", module: { in: baseModules } } }),
+      prisma.subscription.findFirst({ where: { organizationId: req.organizationId, status: { in: ["active", "trialing"] }, module: addonModule } }),
+      prisma.subscription.findFirst({ where: { organizationId: req.organizationId, status: { in: ["active", "trialing"] }, module: { in: baseModules } } }),
     ]);
     if (!base) {
       return res.status(402).json({ error: `Este recurso exige uma assinatura ativa de ${baseModules.join(" ou ")}.` });
