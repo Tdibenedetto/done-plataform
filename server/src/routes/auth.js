@@ -14,6 +14,7 @@ function publicUser(user, organization) {
   return {
     id: user.id, email: user.email, name: user.name, role: user.role,
     organizationId: user.organizationId, company: organization?.name,
+    isPlatformAdmin: !!process.env.PLATFORM_ADMIN_EMAIL && user.email.toLowerCase() === process.env.PLATFORM_ADMIN_EMAIL.toLowerCase(),
   };
 }
 
@@ -29,7 +30,7 @@ router.post("/register", async (req, res) => {
   const passwordHash = await bcrypt.hash(password, 10);
   const organization = await prisma.organization.create({ data: { name: company || name } });
   const user = await prisma.user.create({
-    data: { email, passwordHash, name, role: "master", organizationId: organization.id },
+    data: { email, passwordHash, name, role: "master", organizationId: organization.id, lastLoginAt: new Date() },
   });
   res.json({ token: signToken(user), user: publicUser(user, organization) });
 });
@@ -40,6 +41,7 @@ router.post("/login", async (req, res) => {
   if (!user) return res.status(401).json({ error: "E-mail ou senha inválidos." });
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return res.status(401).json({ error: "E-mail ou senha inválidos." });
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   res.json({ token: signToken(user), user: publicUser(user, user.organization) });
 });
 
@@ -67,7 +69,7 @@ router.post("/invite/:token/accept", async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
-    data: { email: invite.email, passwordHash, name, role: "member", organizationId: invite.organizationId },
+    data: { email: invite.email, passwordHash, name, role: "member", organizationId: invite.organizationId, lastLoginAt: new Date() },
   });
   await prisma.invite.update({ where: { id: invite.id }, data: { status: "accepted" } });
   const organization = await prisma.organization.findUnique({ where: { id: invite.organizationId } });

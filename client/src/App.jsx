@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Activity, Trello, BarChart2, LayoutGrid, Eye, EyeOff,
-  ShieldCheck, Menu, X, ChevronRight, CreditCard, LifeBuoy, Wallet,
+  ShieldCheck, Menu, X, ChevronRight, CreditCard, LifeBuoy, Wallet, Building2,
 } from "lucide-react";
 import { C, S, FONT_DISPLAY, FONT_IMPORT, RESPONSIVE_CSS } from "./theme.js";
 import { api, saveSession, loadSession, clearSession } from "./lib/api.js";
@@ -10,6 +10,7 @@ import FerramentaVendas from "./modules/Vendas.jsx";
 import FerramentaGestao from "./modules/Gestao.jsx";
 import Credito from "./modules/Credito.jsx";
 import VisaoGeral from "./modules/VisaoGeral.jsx";
+import AdminOverview from "./modules/AdminOverview.jsx";
 import Suporte from "./modules/Suporte.jsx";
 import Dre from "./modules/Dre.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
@@ -79,6 +80,7 @@ export default function App() {
         {activeModule === "credito" && <Credito />}
         {activeModule === "suporte" && <Suporte />}
         {activeModule === "dre" && <Dre />}
+        {activeModule === "admin" && <AdminOverview />}
       </div>
 
       <ChatWidget />
@@ -332,6 +334,7 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
     ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gestão", icon: BarChart2 }] : []),
     ...(isMaster ? [{ key: "dre", label: "DRE / Fluxo de Caixa", icon: Wallet }] : []),
     ...(isMaster ? [{ key: "suporte", label: "Suporte", icon: LifeBuoy }] : []),
+    ...(profile.isPlatformAdmin ? [{ key: "admin", label: "Admin Geral", icon: Building2 }] : []),
   ];
 
   const dims = coachResult ? [

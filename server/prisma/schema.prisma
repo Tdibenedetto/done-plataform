@@ -42,6 +42,7 @@ model User {
   role           String       @default("master") // "master" | "member"
   phone          String?      // E.164, usado nos lembretes automáticos de follow-up
   createdAt      DateTime     @default(now())
+  lastLoginAt    DateTime?    // atualizado a cada login — usado para saúde de uso no painel Admin Geral
 
   assignedLeads Lead[]
   goals         Goal[]
@@ -205,6 +206,7 @@ model Subscription {
   status               String   // "active" | "canceled" | "past_due"
   stripeSubscriptionId String?  @unique
   currentPeriodEnd     DateTime?
+  canceledAt           DateTime? // preenchido quando o webhook recebe subscription.deleted — usado para calcular churn
   createdAt            DateTime @default(now())
 
   @@index([organizationId])

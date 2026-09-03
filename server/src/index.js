@@ -14,7 +14,8 @@ import teamRoutes from "./routes/team.js";
 import creditoRoutes from "./routes/credito.js";
 import chatRoutes from "./routes/chat.js";
 import dreRoutes from "./routes/dre.js";
-import { requireAuth } from "./middleware/auth.js";
+import adminRoutes from "./routes/admin.js";
+import { requireAuth, requirePlatformAdmin } from "./middleware/auth.js";
 import { runFollowUpCheck } from "./jobs/followUp.js";
 import { runCnpjMonitorCheck } from "./jobs/monitorCnpj.js";
 import { runWeeklyReportCheck } from "./jobs/weeklyReport.js";
@@ -100,6 +101,7 @@ app.use("/api/team", requireAuth, teamRoutes);
 app.use("/api/credito", requireAuth, creditoRoutes);
 app.use("/api/chat", requireAuth, chatRoutes);
 app.use("/api/dre", requireAuth, dreRoutes);
+app.use("/api/admin", requireAuth, requirePlatformAdmin, adminRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

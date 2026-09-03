@@ -25,6 +25,19 @@ export function requireMaster(req, res, next) {
   next();
 }
 
+// Restrito ao Admin Geral da D.O.N.E (o próprio fundador) — não confundir com "master" de organização,
+// que é o admin de UMA empresa cliente. Identificado por e-mail (variável PLATFORM_ADMIN_EMAIL no Render),
+// não por um papel no banco, para não precisar de migração/seed extra para promover a conta.
+export async function requirePlatformAdmin(req, res, next) {
+  const adminEmail = process.env.PLATFORM_ADMIN_EMAIL;
+  if (!adminEmail) return res.status(403).json({ error: "Painel Admin não configurado (PLATFORM_ADMIN_EMAIL ausente)." });
+  const user = await prisma.user.findUnique({ where: { id: req.userId } });
+  if (!user || user.email.toLowerCase() !== adminEmail.toLowerCase()) {
+    return res.status(403).json({ error: "Acesso restrito ao Admin Geral da D.O.N.E." });
+  }
+  next();
+}
+
 // Exige que a organização tenha uma assinatura ativa de Vendas, Gestão ou Completo.
 export async function requirePaidModule(req, res, next) {
   const sub = await prisma.subscription.findFirst({

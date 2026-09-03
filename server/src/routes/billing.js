@@ -70,6 +70,34 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
     }
   }
 
+  // Mantém o status real da assinatura em dia — sem isso, "pagamento atrasado" nunca refletiria
+  // a realidade (ficaria "active" para sempre, mesmo com cartão recusado ou assinatura cancelada).
+  if (event.type === "customer.subscription.updated") {
+    const sub = event.data.object;
+    await prisma.subscription.updateMany({
+      where: { stripeSubscriptionId: sub.id },
+      data: { status: sub.status, currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : null },
+    });
+  }
+
+  if (event.type === "customer.subscription.deleted") {
+    const sub = event.data.object;
+    const existing = await prisma.subscription.findUnique({ where: { stripeSubscriptionId: sub.id } });
+    if (existing) {
+      await prisma.subscription.update({
+        where: { id: existing.id },
+        data: { status: "canceled", canceledAt: new Date() },
+      });
+      // Se era o plano base da organização, limpa — evita mostrar um plano que não existe mais.
+      if (["vendas", "gestao", "completo"].includes(existing.module)) {
+        const org = await prisma.organization.findUnique({ where: { id: existing.organizationId } });
+        if (org?.plan === existing.module) {
+          await prisma.organization.update({ where: { id: existing.organizationId }, data: { plan: null } });
+        }
+      }
+    }
+  }
+
   res.json({ received: true });
 });
 

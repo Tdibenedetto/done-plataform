@@ -105,5 +105,8 @@ Object.assign(api, {
   dreAdd: (data) => request("/dre", { method: "POST", body: data }),
   dreDelete: (id) => request(`/dre/${id}`, { method: "DELETE" }),
   dreSetSaldoInicial: (saldoInicial) => request("/dre/saldo-inicial", { method: "PUT", body: { saldoInicial } }),
+  adminOverview: () => request("/admin/overview"),
+  adminClients: () => request("/admin/clients"),
+  adminActivationRisk: () => request("/admin/activation-risk"),
 });
 
