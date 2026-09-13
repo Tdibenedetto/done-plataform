@@ -2,11 +2,16 @@ import { Router } from "express";
 import multer from "multer";
 import Papa from "papaparse";
 import { prisma } from "../lib/prisma.js";
-import { requireMaster } from "../middleware/auth.js";
+import { requireMaster, requirePlan } from "../middleware/auth.js";
 import { mapSpreadsheetColumns, normalizeMes, normalizeMargem, normalizeEstoque } from "../lib/claude.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+// Antes desta linha, este módulo não checava plano nenhum, e só a rota de metas exigia
+// Master — o upload de planilha (o núcleo do módulo) estava aberto pra qualquer membro
+// de qualquer organização, mesmo sem assinatura. Gestão é Master-only por regra de negócio.
+router.use(requireMaster, requirePlan(["gestao", "completo"]));
 
 const CANONICAL_HEADERS = ["mes", "categoria", "produto", "sku", "valor", "margem", "estoque"];
 
@@ -97,7 +102,7 @@ router.get("/goals", async (req, res) => {
   res.json(goals);
 });
 
-router.put("/goals", requireMaster, async (req, res) => {
+router.put("/goals", async (req, res) => {
   const { month, target } = req.body;
   if (!month) return res.status(400).json({ error: "Mês é obrigatório." });
   const goal = await prisma.revenueGoal.upsert({

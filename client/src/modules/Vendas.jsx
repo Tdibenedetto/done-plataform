@@ -17,7 +17,9 @@ function saldoRestante(lead) {
   return Math.max(0, lead.value - totalInvoiced(lead));
 }
 
-export default function FerramentaVendas() {
+export default function FerramentaVendas({ goTo }) {
+  const [locked, setLocked] = useState(false);
+  const [lockMessage, setLockMessage] = useState(null);
   const session = loadSession();
   const isMaster = session?.user?.role === "master";
 
@@ -40,11 +42,16 @@ export default function FerramentaVendas() {
   const [filters, setFilters] = useState({ assignedUserId: "", minValue: "", maxValue: "" });
 
   const reload = useCallback(async () => {
-    const calls = [api.leadsList(), api.goalsList(), api.teamGet()];
-    const [ls, gs, tm] = await Promise.all(calls);
-    setLeads(ls);
-    setGoals(gs);
-    setTeam(tm);
+    try {
+      const calls = [api.leadsList(), api.goalsList(), api.teamGet()];
+      const [ls, gs, tm] = await Promise.all(calls);
+      setLeads(ls);
+      setGoals(gs);
+      setTeam(tm);
+    } catch (e) {
+      setLocked(true);
+      setLockMessage(e.message);
+    }
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
@@ -58,6 +65,21 @@ export default function FerramentaVendas() {
       return true;
     });
   }, [leads, filters]);
+
+  if (locked) {
+    return (
+      <div style={S.moduleCol}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 32, display: "flex", flexDirection: "column", gap: 14, alignItems: "center", textAlign: "center", maxWidth: 480, margin: "40px auto" }}>
+          <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.gold, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <TrendingUp size={22} color="#fff" />
+          </div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>Ferramenta de Vendas</div>
+          <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>{lockMessage || "Este recurso é exclusivo para assinantes de Vendas ou do Pacote Completo."}</p>
+          <button style={S.primaryBtn} onClick={() => goTo?.("planos")}>Ver planos</button>
+        </div>
+      </div>
+    );
+  }
 
   if (leads === null || team === null) return <div style={{ color: C.muted, fontSize: 13 }}>Carregando...</div>;
 

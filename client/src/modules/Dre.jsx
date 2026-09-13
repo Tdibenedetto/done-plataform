@@ -25,7 +25,7 @@ function last12Months() {
   return out;
 }
 
-export default function Dre() {
+export default function Dre({ goTo }) {
   const isPlatformAdmin = loadSession()?.user?.isPlatformAdmin;
   const months = useMemo(() => last12Months(), []);
   const [month, setMonth] = useState(months[months.length - 1].key);
@@ -182,6 +182,7 @@ export default function Dre() {
         <div style={{ border: `1.5px dashed ${C.border}`, borderRadius: 14, padding: 32, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
           <Wallet size={24} color={C.gold} />
           <div style={{ fontSize: 13.5, color: C.inkSoft, maxWidth: 380 }}>{locked}</div>
+          <button style={S.primaryBtn} onClick={() => goTo?.("planos")}>Ver planos</button>
           {isPlatformAdmin && (
             <button style={S.ghostBtn} disabled={granting} onClick={grantTestAccess}>
               {granting ? "Liberando..." : "Liberar acesso de teste (sem cobrar)"}

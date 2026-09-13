@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
-import { requireMaster } from "../middleware/auth.js";
+import { requireMaster, requirePlan } from "../middleware/auth.js";
 
 const router = Router();
+router.use(requirePlan(["vendas", "completo"]));
 
 router.get("/", async (req, res) => {
   const where = req.userRole === "master"

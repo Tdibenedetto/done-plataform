@@ -1,8 +1,13 @@
 import { Router } from "express";
 import { sendAlert } from "../lib/twilio.js";
 import { prisma } from "../lib/prisma.js";
+import { requirePlan } from "../middleware/auth.js";
 
 const router = Router();
+
+// Rota separada de leads.js, então tinha sua própria brecha: sem isso, o follow-up
+// automático (uma funcionalidade só de quem assina Vendas/Completo) rodava pra qualquer conta.
+router.use(requirePlan(["vendas", "completo"]));
 
 // Same pattern used in Iconic Storm Watch: fires a WhatsApp/SMS message with a
 // fixed title + a short body. Here it's used for follow-up reminders on stalled leads.

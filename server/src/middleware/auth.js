@@ -38,15 +38,20 @@ export async function requirePlatformAdmin(req, res, next) {
   next();
 }
 
-// Exige que a organização tenha uma assinatura ativa (ou em período de teste) de Vendas, Gestão ou Completo.
-export async function requirePaidModule(req, res, next) {
-  const sub = await prisma.subscription.findFirst({
-    where: { organizationId: req.organizationId, status: { in: ["active", "trialing"] }, module: { in: ["vendas", "gestao", "completo"] } },
-  });
-  if (!sub) {
-    return res.status(402).json({ error: "Este recurso é exclusivo para assinantes de Vendas, Gestão ou do Pacote Completo." });
-  }
-  next();
+// Exige que a organização tenha uma assinatura ativa (ou em período de teste) de algum dos
+// módulos base informados. Cada ferramenta paga passa a lista certa: Vendas exige ["vendas","completo"],
+// Gestão exige ["gestao","completo"], Análise de Crédito aceita qualquer um dos três.
+export function requirePlan(allowedModules) {
+  return async (req, res, next) => {
+    const sub = await prisma.subscription.findFirst({
+      where: { organizationId: req.organizationId, status: { in: ["active", "trialing"] }, module: { in: allowedModules } },
+    });
+    if (!sub) {
+      const labels = { vendas: "Ferramenta de Vendas", gestao: "Ferramenta de Gestão", completo: "Pacote Completo" };
+      return res.status(402).json({ error: `Este recurso é exclusivo para assinantes de ${allowedModules.map((m) => labels[m] || m).join(", ")}.` });
+    }
+    next();
+  };
 }
 
 // Exige um add-on pago específico (ex: "dre", "whatsapp"), além do plano base que o add-on requer.

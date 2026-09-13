@@ -33,7 +33,7 @@ router.post("/checkout", requireMaster, async (req, res) => {
       },
     ],
     metadata: { organizationId: req.organizationId, product },
-    success_url: `${process.env.CLIENT_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+    success_url: `${process.env.CLIENT_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}&product=${product}`,
     cancel_url: `${process.env.CLIENT_URL}/billing/cancel`,
   });
 
@@ -79,7 +79,7 @@ router.post("/admin-checkout-link", requirePlatformAdmin, async (req, res) => {
     ],
     subscription_data: { trial_period_days: days },
     metadata: { organizationId, product },
-    success_url: `${process.env.CLIENT_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+    success_url: `${process.env.CLIENT_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}&product=${product}`,
     cancel_url: `${process.env.CLIENT_URL}/billing/cancel`,
   });
 

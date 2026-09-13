@@ -18,7 +18,7 @@ Jun,Organização,Caixa Organizadora,ORG-018,35000,29,ruptura
 Jul,Utilidades Domésticas,Panela Pressão,UD-1090,41000,31,ok
 Ago,Decoração,Espelho Decorativo,DEC-410,26000,38,ok`;
 
-export default function FerramentaGestao() {
+export default function FerramentaGestao({ goTo }) {
   const isMaster = loadSession()?.user?.role === "master";
   const [data, setData] = useState(null); // null=loading; { uploads, rows }
   const [goals, setGoals] = useState([]);
@@ -27,12 +27,26 @@ export default function FerramentaGestao() {
   const [uploading, setUploading] = useState(false);
   const [showSkus, setShowSkus] = useState(false);
   const [mapNotice, setMapNotice] = useState(null);
+  const [locked, setLocked] = useState(false);
+  const [lockMessage, setLockMessage] = useState(null);
 
   async function reload() {
-    const [all, gs, ls] = await Promise.all([api.gestaoAll(), api.gestaoGoals(), api.leadsList()]);
-    setData(all);
-    setGoals(gs);
-    setLeads(ls);
+    try {
+      const [all, gs] = await Promise.all([api.gestaoAll(), api.gestaoGoals()]);
+      setData(all);
+      setGoals(gs);
+    } catch (e) {
+      setLocked(true);
+      setLockMessage(e.message);
+      return;
+    }
+    // Cruzamento Vendas × Margem é um extra — cliente só de Gestão (sem Vendas/Completo)
+    // não tem acesso a leads, e isso NÃO pode derrubar o resto do módulo por causa disso.
+    try {
+      setLeads(await api.leadsList());
+    } catch {
+      setLeads([]);
+    }
   }
   useEffect(() => { reload(); }, []);
 
@@ -70,6 +84,21 @@ export default function FerramentaGestao() {
   async function saveMonthGoal(value) {
     await api.gestaoGoalSet({ month: currentMonthKey(), target: Number(value) || 0 });
     reload();
+  }
+
+  if (locked) {
+    return (
+      <div style={S.moduleCol}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 32, display: "flex", flexDirection: "column", gap: 14, alignItems: "center", textAlign: "center", maxWidth: 480, margin: "40px auto" }}>
+          <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.gold, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Target size={22} color="#fff" />
+          </div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>Ferramenta de Gestão</div>
+          <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>{lockMessage || "Este recurso é exclusivo para assinantes de Gestão ou do Pacote Completo."}</p>
+          <button style={S.primaryBtn} onClick={() => goTo?.("planos")}>Ver planos</button>
+        </div>
+      </div>
+    );
   }
 
   if (data === null) return <div style={{ color: C.muted, fontSize: 13 }}>Carregando...</div>;

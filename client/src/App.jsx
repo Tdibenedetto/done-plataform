@@ -1,7 +1,7 @@
 import React, { Component, useState, useEffect } from "react";
 import {
   Activity, Trello, BarChart2, LayoutGrid, Eye, EyeOff,
-  ShieldCheck, Menu, X, ChevronRight, CreditCard, LifeBuoy, Wallet, Building2,
+  ShieldCheck, Menu, X, ChevronRight, CreditCard, LifeBuoy, Wallet, Building2, Tag,
 } from "lucide-react";
 import { C, S, FONT_DISPLAY, FONT_IMPORT, RESPONSIVE_CSS } from "./theme.js";
 import { api, saveSession, loadSession, clearSession } from "./lib/api.js";
@@ -11,6 +11,7 @@ import FerramentaGestao from "./modules/Gestao.jsx";
 import Credito from "./modules/Credito.jsx";
 import VisaoGeral from "./modules/VisaoGeral.jsx";
 import AdminOverview from "./modules/AdminOverview.jsx";
+import Planos from "./modules/Planos.jsx";
 import Suporte from "./modules/Suporte.jsx";
 import Dre from "./modules/Dre.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
@@ -36,9 +37,14 @@ class ErrorBoundary extends Component {
 
 export default function App() {
   const [session, setSession] = useState(() => loadSession());
-  const [activeModule, setActiveModule] = useState(() =>
-    window.location.pathname.startsWith("/billing/") ? "coach" : "overview"
-  );
+  const [activeModule, setActiveModule] = useState(() => {
+    if (!window.location.pathname.startsWith("/billing/")) return "overview";
+    // Antes disto, QUALQUER retorno do Stripe (Vendas, Gestão, Completo, add-ons)
+    // caía sempre no Comercial Coach. Agora usa o produto comprado (vem na URL de
+    // retorno) para levar a pessoa pra um lugar que faça sentido com o que ela comprou.
+    const product = new URLSearchParams(window.location.search).get("product");
+    return product && product !== "coach_report" ? "planos" : "coach";
+  });
   const [coachResult, setCoachResult] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -95,11 +101,12 @@ export default function App() {
         <ErrorBoundary>
           {activeModule === "overview" && <VisaoGeral coachResult={coachResult} goTo={goTo} />}
           {activeModule === "coach" && <ComercialCoach goTo={goTo} onResult={setCoachResult} />}
-          {activeModule === "vendas" && <FerramentaVendas />}
-          {activeModule === "gestao" && <FerramentaGestao />}
-          {activeModule === "credito" && <Credito />}
+          {activeModule === "vendas" && <FerramentaVendas goTo={goTo} />}
+          {activeModule === "gestao" && <FerramentaGestao goTo={goTo} />}
+          {activeModule === "credito" && <Credito goTo={goTo} />}
+          {activeModule === "planos" && <Planos />}
           {activeModule === "suporte" && <Suporte />}
-          {activeModule === "dre" && <Dre />}
+          {activeModule === "dre" && <Dre goTo={goTo} />}
           {activeModule === "admin" && <AdminOverview />}
         </ErrorBoundary>
       </div>
@@ -352,6 +359,7 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
     { key: "coach", label: "Comercial Coach", icon: Activity },
     { key: "vendas", label: "Ferramenta de Vendas", icon: Trello },
     { key: "credito", label: "Análise de Crédito", icon: CreditCard },
+    { key: "planos", label: "Planos", icon: Tag },
     ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gestão", icon: BarChart2 }] : []),
     ...(isMaster ? [{ key: "dre", label: "DRE / Fluxo de Caixa", icon: Wallet }] : []),
     ...(isMaster ? [{ key: "suporte", label: "Suporte", icon: LifeBuoy }] : []),

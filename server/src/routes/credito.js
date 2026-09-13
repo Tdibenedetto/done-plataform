@@ -2,13 +2,13 @@ import { Router } from "express";
 import multer from "multer";
 import { prisma } from "../lib/prisma.js";
 import { extractFinancials } from "../lib/claude.js";
-import { requirePaidModule, requireMaster } from "../middleware/auth.js";
+import { requirePlan, requireMaster } from "../middleware/auth.js";
 import { runCnpjMonitorCheck } from "../jobs/monitorCnpj.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-router.use(requirePaidModule);
+router.use(requirePlan(["vendas", "gestao", "completo"]));
 
 // -------- Regras de crédito (transparentes, ajustáveis — não é birô oficial) --------
 function avaliarCredito(f) {

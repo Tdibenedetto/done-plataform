@@ -5,7 +5,7 @@ import { api, loadSession } from "../lib/api.js";
 
 const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
-export default function Credito() {
+export default function Credito({ goTo }) {
   const [history, setHistory] = useState(null);
   const [locked, setLocked] = useState(false);
   const [lockMessage, setLockMessage] = useState(null);
@@ -124,6 +124,7 @@ export default function Credito() {
           </div>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>Análise de Crédito</div>
           <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>{lockMessage || "Este recurso é exclusivo para assinantes de Vendas, Gestão ou do Pacote Completo."}</p>
+          <button style={S.primaryBtn} onClick={() => goTo?.("planos")}>Ver planos</button>
           {isPlatformAdmin && (
             <button style={S.ghostBtn} disabled={granting} onClick={grantTestAccess}>
               {granting ? "Liberando..." : "Liberar acesso de teste (sem cobrar)"}

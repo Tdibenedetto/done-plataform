@@ -1,8 +1,13 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
+import { requirePlan } from "../middleware/auth.js";
 
 const router = Router();
 const STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação", "Fechado", "Carteira", "Faturado Total", "Perdido"];
+
+// Antes desta linha, este módulo não checava plano nenhum — qualquer conta cadastrada
+// usava a Ferramenta de Vendas por completo, de graça, para sempre.
+router.use(requirePlan(["vendas", "completo"]));
 
 function leadWhere(req, id) {
   return req.userRole === "master"
