@@ -239,7 +239,10 @@ export default function FerramentaVendas({ goTo }) {
                 {filteredLeads.filter((l) => l.stage === stage).map((l) => (
                   <div key={l.id} onClick={() => setOpenLead(l)} style={{ background: C.card, border: `1px solid ${isOverdue(l) ? C.danger : C.border}`, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 6, cursor: "pointer" }}>
                     <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3, display: "flex", justifyContent: "space-between", gap: 6 }}>
-                      <span>{l.name}</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        {l.source === "whatsapp" && <Phone size={11} color={C.sage} title={`Captado via WhatsApp${l.phone ? " · " + l.phone : ""}`} />}
+                        {l.name}
+                      </span>
                       {l._count?.notes > 0 && (
                         <span style={{ display: "flex", alignItems: "center", gap: 2, color: C.muted, flexShrink: 0 }}>
                           <MessageSquare size={11} />{l._count.notes}

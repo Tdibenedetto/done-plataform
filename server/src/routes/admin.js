@@ -107,6 +107,7 @@ router.get("/clients", async (req, res) => {
       paymentStatus,
       trialEndsAt: baseSub?.status === "trialing" ? baseSub.currentPeriodEnd : null,
       lastAccess,
+      whatsappNumber: org.whatsappNumber,
     };
   });
 
@@ -148,6 +149,29 @@ router.get("/activation-risk", async (req, res) => {
   }
 
   res.json({ risk });
+});
+
+// Atribui (ou remove, com null/vazio) o número de WhatsApp Business já provisionado no Twilio
+// para esta organização — a captação automática de leads só funciona depois disso.
+router.put("/clients/:organizationId/whatsapp-number", async (req, res) => {
+  const { organizationId } = req.params;
+  const raw = (req.body.whatsappNumber || "").trim();
+  const whatsappNumber = raw ? raw.replace(/^whatsapp:/, "") : null;
+
+  const org = await prisma.organization.findUnique({ where: { id: organizationId } });
+  if (!org) return res.status(404).json({ error: "Organização não encontrada." });
+
+  if (whatsappNumber && !/^\+?[1-9]\d{7,14}$/.test(whatsappNumber)) {
+    return res.status(400).json({ error: "Informe o número em formato internacional (ex: +5511999999999) ou deixe em branco para remover." });
+  }
+
+  try {
+    const updated = await prisma.organization.update({ where: { id: organizationId }, data: { whatsappNumber } });
+    res.json({ whatsappNumber: updated.whatsappNumber });
+  } catch (e) {
+    if (e.code === "P2002") return res.status(409).json({ error: "Esse número já está atribuído a outra organização." });
+    throw e;
+  }
 });
 
 export default router;

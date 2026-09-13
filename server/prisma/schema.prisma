@@ -11,6 +11,7 @@ model Organization {
   id        String   @id @default(uuid())
   name      String
   plan      String?  // "vendas" | "gestao" | "completo" | null (sem assinatura ainda)
+  whatsappNumber String? @unique // número de WhatsApp Business (E.164, sem prefixo "whatsapp:") desta organização, usado para captação automática de leads. Atribuído manualmente pelo Admin Geral após provisionar o número no Twilio.
   followUpDays Int   @default(3) // dias sem atualização até disparar lembrete automático
   lastWeeklyReportAt DateTime? // controla o envio do relatório semanal por e-mail (1x por semana)
   createdAt DateTime @default(now())
@@ -91,6 +92,8 @@ model Lead {
   assignedUserId String?
   assignedUser   User?        @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
   name           String
+  phone          String?      // telefone de contato — preenchido manualmente ou automaticamente (captação via WhatsApp)
+  source         String       @default("manual") // "manual" | "whatsapp" — de onde este lead veio
   value          Float        @default(0)
   categoria      String?
   stage          String       @default("Novo Lead")

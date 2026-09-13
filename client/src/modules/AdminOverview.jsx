@@ -127,6 +127,7 @@ export default function AdminOverview() {
       </div>
 
       <TrialLinkGenerator clients={clients} />
+      <WhatsappNumberAssigner clients={clients} />
 
       <div className="done-two-col-grid" style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 16 }}>
         <div style={S.qCard}>
@@ -243,6 +244,58 @@ function TrialLinkGenerator({ clients }) {
           <button style={S.ghostBtn} onClick={copy}>{copied ? "Copiado!" : "Copiar"}</button>
         </div>
       )}
+    </div>
+  );
+}
+
+function WhatsappNumberAssigner({ clients }) {
+  const [organizationId, setOrganizationId] = useState("");
+  const [number, setNumber] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+
+  const selected = clients.find((c) => c.organizationId === organizationId);
+
+  useEffect(() => {
+    setNumber(selected?.whatsappNumber || "");
+    setSuccess(null);
+    setError(null);
+  }, [organizationId]);
+
+  async function save() {
+    if (!organizationId) { setError("Escolha um cliente."); return; }
+    setBusy(true); setError(null); setSuccess(null);
+    try {
+      await api.adminSetWhatsappNumber(organizationId, number);
+      setSuccess(number ? "Número atribuído." : "Número removido.");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={S.qCard}>
+      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14.5, color: C.ink }}>Número de WhatsApp — Captação de Leads</div>
+      <div style={{ fontSize: 12, color: C.muted, marginTop: -6 }}>Depois de provisionar o número no Twilio, atribui aqui a qual cliente ele pertence. Só funciona pra quem tem o add-on de WhatsApp ativo.</div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ flex: "2 1 220px" }}>
+          <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>Cliente</div>
+          <select style={S.input} value={organizationId} onChange={(e) => setOrganizationId(e.target.value)}>
+            <option value="">Selecione...</option>
+            {clients.map((c) => <option key={c.organizationId} value={c.organizationId}>{c.name}{c.whatsappNumber ? ` (${c.whatsappNumber})` : ""}</option>)}
+          </select>
+        </div>
+        <div style={{ flex: "1 1 200px" }}>
+          <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>Número (formato +5511999999999)</div>
+          <input style={S.input} value={number} onChange={(e) => setNumber(e.target.value)} placeholder="+5511999999999" />
+        </div>
+        <button style={S.primaryBtnSm} disabled={busy} onClick={save}>{busy ? "Salvando..." : "Salvar"}</button>
+      </div>
+      {error && <div style={{ fontSize: 12, color: C.danger }}>{error}</div>}
+      {success && <div style={{ fontSize: 12, color: C.sage }}>{success}</div>}
     </div>
   );
 }
