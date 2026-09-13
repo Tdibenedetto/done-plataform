@@ -21,8 +21,6 @@ function statusColor(iso) {
   return C.danger;
 }
 
-const PLAN_LABEL = { vendas: "Ferramenta de Vendas", gestao: "Ferramenta de Gestão", completo: "Pacote Completo" };
-
 export default function AdminOverview() {
   const [overview, setOverview] = useState(null);
   const [clients, setClients] = useState(null);
@@ -96,7 +94,7 @@ export default function AdminOverview() {
                     <div style={{ fontWeight: 700, color: C.ink }}>{c.name}</div>
                     <div style={{ fontSize: 11, color: C.muted }}>Master: {c.masterName || "—"}</div>
                   </td>
-                  <td style={td}>{PLAN_LABEL[c.plan] || "Sem plano"}</td>
+                  <td style={td}>{c.planLabel || "Sem plano"}</td>
                   <td style={td}>{c.usersActive} / {c.usersMax}</td>
                   <td style={td}>
                     {c.addons.length

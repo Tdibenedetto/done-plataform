@@ -88,12 +88,18 @@ export default function ComercialCoach({ goTo, onResult }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // Confere se o relatório completo já foi pago (inclusive ao voltar do checkout do Stripe).
+  // Confere se o relatório completo está liberado: assinatura trimestral ativa/em teste
+  // (modelo atual) OU um pagamento avulso antigo (compatibilidade com quem comprou antes
+  // da mudança para assinatura — nenhum cliente novo passa mais por esse caminho).
   useEffect(() => {
     if (stage !== "results") return;
     setCheckingBilling(true);
     api.billingStatus()
-      .then((s) => setUnlocked((s.payments || []).some((p) => p.type === "coach_report")))
+      .then((s) => {
+        const hasActiveSub = (s.subscriptions || []).some((sub) => sub.module === "coach" && ["active", "trialing"].includes(sub.status));
+        const hasLegacyPayment = (s.payments || []).some((p) => p.type === "coach_report");
+        setUnlocked(hasActiveSub || hasLegacyPayment);
+      })
       .catch(() => setUnlocked(false))
       .finally(() => setCheckingBilling(false));
   }, [stage]);
@@ -292,12 +298,12 @@ export default function ComercialCoach({ goTo, onResult }) {
         <UnlockedContent dimsArr={dimsArr} top3={top3} result={result} onResultChange={setResult} history={history} />
       ) : (
         <div style={{ background: C.ink, color: "#fff", borderRadius: 16, padding: 26, display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 18 }}>Relatório completo — R$ 147</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 18 }}>Relatório completo — R$ 127 a cada 3 meses</div>
           <p style={{ fontSize: 13.5, opacity: 0.8, lineHeight: 1.55, maxWidth: 440, margin: "0 0 10px" }}>
-            Análise detalhada de cada resposta, comparação com o benchmark do seu segmento e um plano de ação completo, não só as 3 prioridades.
+            Análise detalhada de cada resposta, comparação com o benchmark do seu segmento e um plano de ação completo — com reavaliação automática a cada trimestre, para acompanhar sua evolução.
           </p>
-          <button style={S.primaryBtn} onClick={() => api.checkout("coach_report").then((r) => (window.location.href = r.url))}>
-            Desbloquear relatório completo
+          <button style={S.primaryBtn} onClick={() => api.checkout("coach").then((r) => (window.location.href = r.url))}>
+            Assinar relatório completo
           </button>
         </div>
       ))}

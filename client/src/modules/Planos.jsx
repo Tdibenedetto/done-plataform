@@ -5,6 +5,19 @@ import { api } from "../lib/api.js";
 
 const PLANS = [
   {
+    key: "credito",
+    name: "Análise de Crédito",
+    price: 147,
+    per: "/mês",
+    note: "Vendável sozinha — não exige nenhum outro plano.",
+    features: [
+      "Consulta de CNPJ direto na Receita Federal",
+      "Extração de balanço/DRE em PDF por IA",
+      "Limite de crédito sugerido, com o motivo",
+      "Monitoramento contínuo da situação cadastral",
+    ],
+  },
+  {
     key: "vendas",
     name: "Ferramenta de Vendas",
     price: 197,
@@ -56,6 +69,11 @@ export default function Planos() {
   const [status, setStatus] = useState(null);
   const [busyKey, setBusyKey] = useState(null);
   const [error, setError] = useState(null);
+  const [highlightKey] = useState(() => {
+    const v = localStorage.getItem("done_highlight_plan");
+    if (v) localStorage.removeItem("done_highlight_plan"); // uso único — não deve reaparecer nas próximas visitas
+    return v;
+  });
 
   useEffect(() => {
     api.billingStatus().then(setStatus).catch(() => setStatus({ subscriptions: [] }));
@@ -65,7 +83,7 @@ export default function Planos() {
     .filter((s) => s.status === "active" || s.status === "trialing")
     .map((s) => s.module);
   const trialingModules = (status?.subscriptions || []).filter((s) => s.status === "trialing").map((s) => s.module);
-  const currentBase = ["completo", "gestao", "vendas"].find((m) => activeModules.includes(m)) || null;
+  const currentBase = ["completo", "gestao", "vendas", "credito"].find((m) => activeModules.includes(m)) || null;
 
   async function subscribe(product) {
     setBusyKey(product);
@@ -96,14 +114,15 @@ export default function Planos() {
       )}
       {error && <div style={{ fontSize: 13, color: C.danger }}>{error}</div>}
 
-      <div className="done-metrics-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+      <div className="done-metrics-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
         {PLANS.map((p) => {
           const isCurrent = activeModules.includes(p.key);
           const isTrialing = trialingModules.includes(p.key);
+          const isSuggested = highlightKey === p.key && !isCurrent;
           return (
             <div key={p.key} style={{
               background: p.highlight ? C.ink : C.card,
-              border: `1px solid ${p.highlight ? C.ink : C.border}`,
+              border: isSuggested ? `2px solid ${C.gold}` : `1px solid ${p.highlight ? C.ink : C.border}`,
               borderRadius: 14, padding: 24, display: "flex", flexDirection: "column", gap: 14,
               position: "relative",
             }}>
@@ -112,7 +131,12 @@ export default function Planos() {
                   MAIS ESCOLHIDO
                 </span>
               )}
-              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, color: p.highlight ? "#fff" : C.ink, marginTop: p.highlight ? 8 : 0 }}>{p.name}</div>
+              {isSuggested && !p.highlight && (
+                <span style={{ position: "absolute", top: -12, left: 20, background: C.gold, color: C.ink, fontSize: 10.5, fontWeight: 700, padding: "4px 12px", borderRadius: 99, letterSpacing: "0.03em" }}>
+                  SELECIONADO NO SITE
+                </span>
+              )}
+              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 17, color: p.highlight ? "#fff" : C.ink, marginTop: (p.highlight || isSuggested) ? 8 : 0 }}>{p.name}</div>
               <div>
                 <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 32, color: p.highlight ? C.gold : C.ink }}>{fmtBRL(p.price)}</span>
                 <span style={{ fontSize: 13, color: p.highlight ? "#9BA0AC" : C.muted }}> {p.per}</span>
@@ -171,7 +195,7 @@ export default function Planos() {
       </div>
 
       <div style={{ fontSize: 12, color: C.muted }}>
-        Já assinou o diagnóstico avulso (Comercial Coach)? Ele não conta como assinatura — o relatório completo é comprado direto na tela do Comercial Coach.
+        O Comercial Coach (relatório completo + reavaliação a cada 3 meses) é assinado direto na tela do próprio Comercial Coach, não aqui.
       </div>
     </div>
   );

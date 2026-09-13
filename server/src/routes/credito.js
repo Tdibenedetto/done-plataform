@@ -8,7 +8,8 @@ import { runCnpjMonitorCheck } from "../jobs/monitorCnpj.js";
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-router.use(requirePlan(["vendas", "gestao", "completo"]));
+// Vendável sozinho (módulo "credito") ou incluso em Vendas, Gestão ou Completo.
+router.use(requirePlan(["vendas", "gestao", "completo", "credito"]));
 
 // -------- Regras de crédito (transparentes, ajustáveis — não é birô oficial) --------
 function avaliarCredito(f) {

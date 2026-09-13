@@ -43,7 +43,7 @@ export default function App() {
     // caía sempre no Comercial Coach. Agora usa o produto comprado (vem na URL de
     // retorno) para levar a pessoa pra um lugar que faça sentido com o que ela comprou.
     const product = new URLSearchParams(window.location.search).get("product");
-    return product && product !== "coach_report" ? "planos" : "coach";
+    return product && product !== "coach" ? "planos" : "coach";
   });
   const [coachResult, setCoachResult] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -67,7 +67,18 @@ export default function App() {
   }, [session]);
 
   if (!session) {
-    return <AuthScreen onAuth={(token, user) => { saveSession(token, user); setSession({ token, user }); }} />;
+    return (
+      <AuthScreen
+        onAuth={(token, user, planoToHighlight) => {
+          saveSession(token, user);
+          setSession({ token, user });
+          if (planoToHighlight) {
+            localStorage.setItem("done_highlight_plan", planoToHighlight);
+            setActiveModule("planos");
+          }
+        }}
+      />
+    );
   }
 
   function goTo(mod) {
@@ -122,6 +133,9 @@ function AuthScreen({ onAuth }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  // Vem do botão de plano no site institucional (ex: donestrategy.com/?plano=completo) —
+  // preservado durante o cadastro para pré-destacar esse plano na tela de Planos depois.
+  const planoParam = new URLSearchParams(window.location.search).get("plano");
 
   async function submit() {
     setBusy(true);
@@ -129,7 +143,7 @@ function AuthScreen({ onAuth }) {
     try {
       const fn = mode === "login" ? api.login : api.register;
       const { token, user } = await fn(form);
-      onAuth(token, user);
+      onAuth(token, user, mode === "register" ? planoParam : null);
     } catch (e) {
       setError(e.message);
     } finally {

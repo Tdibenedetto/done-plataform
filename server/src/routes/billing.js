@@ -11,15 +11,14 @@ const router = Router();
 // isso é proposital, para que nenhum cliente possa se auto-conceder um trial infinito.
 // Conceder teste grátis é feito só pelo Admin Geral, via /admin-checkout-link abaixo.
 router.post("/checkout", requireMaster, async (req, res) => {
-  const { product } = req.body; // "coach_report" | "vendas" | "gestao" | "completo" | "whatsapp" | "dre"
+  const { product } = req.body; // "coach" | "vendas" | "gestao" | "completo" | "credito" | "whatsapp" | "dre"
   const price = PRICES[product];
   if (!price) return res.status(400).json({ error: "Produto inválido." });
 
   const user = await prisma.user.findUnique({ where: { id: req.userId } });
-  const isSubscription = product !== "coach_report";
 
   const session = await stripe.checkout.sessions.create({
-    mode: isSubscription ? "subscription" : "payment",
+    mode: "subscription",
     customer_email: user.email,
     line_items: [
       {
@@ -27,7 +26,7 @@ router.post("/checkout", requireMaster, async (req, res) => {
           currency: "brl",
           product_data: { name: price.label },
           unit_amount: price.amountCents,
-          ...(isSubscription ? { recurring: { interval: "month" } } : {}),
+          recurring: { interval: "month", interval_count: price.intervalCount || 1 },
         },
         quantity: 1,
       },
@@ -101,28 +100,19 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
     const { organizationId, product } = session.metadata || {};
     if (!organizationId || !product) return res.json({ received: true });
 
-    if (product === "coach_report") {
-      await prisma.payment.create({
-        data: {
-          organizationId, type: "coach_report", amountCents: session.amount_total,
-          stripePaymentId: session.payment_intent, status: "paid",
-        },
-      });
-    } else {
-      // Busca o status real no Stripe em vez de assumir "active" — uma assinatura criada com
-      // período de teste (trial_period_days) já nasce como "trialing", não "active", e o painel
-      // Admin Geral depende desse status estar certo (senão o MRR contaria receita que não existe ainda).
-      const stripeSub = await stripe.subscriptions.retrieve(session.subscription);
-      await prisma.subscription.create({
-        data: {
-          organizationId, module: product, status: stripeSub.status, stripeSubscriptionId: session.subscription,
-          currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : null,
-        },
-      });
-      // Só os planos principais (não add-ons como whatsapp/dre) definem o "plan" da organização.
-      if (["vendas", "gestao", "completo"].includes(product)) {
-        await prisma.organization.update({ where: { id: organizationId }, data: { plan: product } });
-      }
+    // Busca o status real no Stripe em vez de assumir "active" — uma assinatura criada com
+    // período de teste (trial_period_days) já nasce como "trialing", não "active", e o painel
+    // Admin Geral depende desse status estar certo (senão o MRR contaria receita que não existe ainda).
+    const stripeSub = await stripe.subscriptions.retrieve(session.subscription);
+    await prisma.subscription.create({
+      data: {
+        organizationId, module: product, status: stripeSub.status, stripeSubscriptionId: session.subscription,
+        currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : null,
+      },
+    });
+    // Só os planos principais (não add-ons como whatsapp/dre, nem coach) definem o "plan" da organização.
+    if (["vendas", "gestao", "completo"].includes(product)) {
+      await prisma.organization.update({ where: { id: organizationId }, data: { plan: product } });
     }
   }
 
