@@ -16,7 +16,7 @@ export const PRICES = {
   coach: { label: "Comercial Coach (trimestral)", amountCents: 12700, intervalCount: 3 },
   vendas: { label: "Ferramenta de Vendas", amountCents: 19700, extraUserCents: 2900 },
   gestao: { label: "Ferramenta de Gestão", amountCents: 24700, extraUserCents: 1900 },
-  completo: { label: "Pacote Completo (Vendas + Gestão)", amountCents: 39700, extraUserCents: 3900 },
+  completo: { label: "Pacote Completo (Vendas + Gestão)", amountCents: 47700, extraUserCents: 3900 },
   // Vendável sozinha (sem precisar de Vendas/Gestão/Completo) — mesmo preço do add-on de DRE,
   // por ter escopo/complexidade parecidos.
   credito: { label: "Análise de Crédito", amountCents: 14700 },

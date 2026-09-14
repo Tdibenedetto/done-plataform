@@ -46,7 +46,7 @@ const PLANS = [
   {
     key: "completo",
     name: "Pacote Completo",
-    price: 397,
+    price: 477,
     per: "/mês",
     note: "Vendas + Gestão + Análise de Crédito, com desconto. +R$39/mês por usuário adicional.",
     features: [
