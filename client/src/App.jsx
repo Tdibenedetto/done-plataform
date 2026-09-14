@@ -372,10 +372,10 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
     { key: "overview", label: "Visão Geral", icon: LayoutGrid },
     { key: "coach", label: "Comercial Coach", icon: Activity },
     { key: "vendas", label: "Ferramenta de Vendas", icon: Trello },
-    { key: "credito", label: "Análise de Crédito", icon: CreditCard },
-    { key: "planos", label: "Planos", icon: Tag },
     ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gestão", icon: BarChart2 }] : []),
+    { key: "credito", label: "Análise de Crédito", icon: CreditCard },
     ...(isMaster ? [{ key: "dre", label: "DRE / Fluxo de Caixa", icon: Wallet }] : []),
+    { key: "planos", label: "Planos", icon: Tag },
     ...(isMaster ? [{ key: "suporte", label: "Suporte", icon: LifeBuoy }] : []),
     ...(profile.isPlatformAdmin ? [{ key: "admin", label: "Admin Geral", icon: Building2 }] : []),
   ];
