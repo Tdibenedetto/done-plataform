@@ -110,5 +110,7 @@ Object.assign(api, {
   adminActivationRisk: () => request("/admin/activation-risk"),
   adminGenerateTrialLink: (organizationId, product, trialDays) => request("/billing/admin-checkout-link", { method: "POST", body: { organizationId, product, trialDays } }),
   adminSetWhatsappNumber: (organizationId, whatsappNumber) => request(`/admin/clients/${organizationId}/whatsapp-number`, { method: "PUT", body: { whatsappNumber } }),
+  adminRenameClient: (organizationId, name) => request(`/admin/clients/${organizationId}/rename`, { method: "PUT", body: { name } }),
+  adminDeleteClient: (organizationId, confirmName) => request(`/admin/clients/${organizationId}`, { method: "DELETE", body: { confirmName } }),
 });
 

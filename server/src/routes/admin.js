@@ -174,4 +174,34 @@ router.put("/clients/:organizationId/whatsapp-number", async (req, res) => {
   }
 });
 
+// Renomeia uma organização — útil para corrigir nome de teste, ou refletir o nome real do cliente.
+router.put("/clients/:organizationId/rename", async (req, res) => {
+  const { organizationId } = req.params;
+  const name = (req.body.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Informe um nome." });
+
+  const org = await prisma.organization.findUnique({ where: { id: organizationId } });
+  if (!org) return res.status(404).json({ error: "Organização não encontrada." });
+
+  const updated = await prisma.organization.update({ where: { id: organizationId }, data: { name } });
+  res.json({ name: updated.name });
+});
+
+// Exclui uma organização e tudo relacionado a ela (usuários, leads, assinaturas, uploads, etc.
+// — todas as relações têm onDelete: Cascade no schema). Irreversível, por isso exige que o
+// nome atual seja digitado exatamente igual como confirmação, em vez de só um clique.
+router.delete("/clients/:organizationId", async (req, res) => {
+  const { organizationId } = req.params;
+  const confirmName = (req.body.confirmName || "").trim();
+
+  const org = await prisma.organization.findUnique({ where: { id: organizationId } });
+  if (!org) return res.status(404).json({ error: "Organização não encontrada." });
+  if (confirmName !== org.name) {
+    return res.status(400).json({ error: "O nome digitado não bate com o nome atual da organização — exclusão cancelada." });
+  }
+
+  await prisma.organization.delete({ where: { id: organizationId } });
+  res.json({ deleted: true });
+});
+
 export default router;

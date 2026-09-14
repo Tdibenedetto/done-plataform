@@ -28,18 +28,18 @@ export default function AdminOverview() {
   const [filter, setFilter] = useState("todos");
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [ov, cl, rk] = await Promise.all([api.adminOverview(), api.adminClients(), api.adminActivationRisk()]);
-        setOverview(ov);
-        setClients(cl.clients);
-        setRisk(rk.risk);
-      } catch (e) {
-        setError(e.message);
-      }
-    })();
-  }, []);
+  async function reload() {
+    try {
+      const [ov, cl, rk] = await Promise.all([api.adminOverview(), api.adminClients(), api.adminActivationRisk()]);
+      setOverview(ov);
+      setClients(cl.clients);
+      setRisk(rk.risk);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  useEffect(() => { reload(); }, []);
 
   if (error) return <div style={{ color: C.danger, fontSize: 13 }}>{error}</div>;
   if (!overview || !clients || !risk) return <div style={{ color: C.muted, fontSize: 13 }}>Carregando...</div>;
@@ -126,6 +126,7 @@ export default function AdminOverview() {
 
       <TrialLinkGenerator clients={clients} />
       <WhatsappNumberAssigner clients={clients} />
+      <ManageClientPanel clients={clients} onChanged={reload} />
 
       <div className="done-two-col-grid" style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 16 }}>
         <div style={S.qCard}>
@@ -292,6 +293,98 @@ function WhatsappNumberAssigner({ clients }) {
         </div>
         <button style={S.primaryBtnSm} disabled={busy} onClick={save}>{busy ? "Salvando..." : "Salvar"}</button>
       </div>
+      {error && <div style={{ fontSize: 12, color: C.danger }}>{error}</div>}
+      {success && <div style={{ fontSize: 12, color: C.sage }}>{success}</div>}
+    </div>
+  );
+}
+
+function ManageClientPanel({ clients, onChanged }) {
+  const [organizationId, setOrganizationId] = useState("");
+  const [newName, setNewName] = useState("");
+  const [confirmName, setConfirmName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+
+  const selected = clients.find((c) => c.organizationId === organizationId);
+
+  useEffect(() => {
+    setNewName(selected?.name || "");
+    setConfirmName("");
+    setSuccess(null);
+    setError(null);
+  }, [organizationId]);
+
+  async function rename() {
+    if (!organizationId || !newName.trim()) { setError("Escolha um cliente e um nome."); return; }
+    setBusy(true); setError(null); setSuccess(null);
+    try {
+      await api.adminRenameClient(organizationId, newName.trim());
+      setSuccess("Nome atualizado.");
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!organizationId) { setError("Escolha um cliente."); return; }
+    setBusy(true); setError(null); setSuccess(null);
+    try {
+      await api.adminDeleteClient(organizationId, confirmName.trim());
+      setSuccess("Organização excluída.");
+      setOrganizationId("");
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canDelete = selected && confirmName.trim() === selected.name;
+
+  return (
+    <div style={S.qCard}>
+      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14.5, color: C.ink }}>Gerenciar cliente</div>
+      <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>Cliente</div>
+      <select style={S.input} value={organizationId} onChange={(e) => setOrganizationId(e.target.value)}>
+        <option value="">Selecione...</option>
+        {clients.map((c) => <option key={c.organizationId} value={c.organizationId}>{c.name}</option>)}
+      </select>
+
+      {selected && (
+        <>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginTop: 4 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>Renomear para</div>
+              <input style={S.input} value={newName} onChange={(e) => setNewName(e.target.value)} />
+            </div>
+            <button style={S.primaryBtnSm} disabled={busy} onClick={rename}>Renomear</button>
+          </div>
+
+          <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 10, paddingTop: 10 }}>
+            <div style={{ fontSize: 11, color: C.danger, marginBottom: 4 }}>
+              Excluir esta organização apaga tudo — usuários, leads, assinaturas, histórico. Não tem volta.
+              Digite <b>{selected.name}</b> para confirmar:
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+              <input style={{ ...S.input, flex: 1 }} value={confirmName} onChange={(e) => setConfirmName(e.target.value)} placeholder={selected.name} />
+              <button
+                disabled={!canDelete || busy}
+                onClick={remove}
+                style={{ ...S.ghostBtn, borderColor: C.danger, color: canDelete ? "#fff" : C.danger, background: canDelete ? C.danger : "transparent", opacity: canDelete ? 1 : 0.5 }}
+              >
+                Excluir permanentemente
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {error && <div style={{ fontSize: 12, color: C.danger }}>{error}</div>}
       {success && <div style={{ fontSize: 12, color: C.sage }}>{success}</div>}
     </div>
