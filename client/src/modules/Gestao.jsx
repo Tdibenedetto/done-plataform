@@ -114,13 +114,13 @@ export default function FerramentaGestao({ goTo }) {
         </div>
         <div style={{ border: `1.5px dashed ${C.border}`, borderRadius: 14, padding: 40, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
           <Upload size={28} color={C.gold} />
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15 }}>Envie um arquivo CSV</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 15 }}>Envie uma planilha (CSV ou Excel)</div>
           <div style={{ fontSize: 12.5, color: C.muted, maxWidth: 400 }}>
             Pode ser sua planilha do jeito que já usa — a IA identifica as colunas automaticamente. Se preferir o formato exato, use: mes, categoria, produto, sku, valor, margem, estoque.
           </div>
           <label style={{ ...S.primaryBtnSm, cursor: "pointer" }}>
             {uploading ? "Enviando..." : "Selecionar arquivo"}
-            <input type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} disabled={uploading} />
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} style={{ display: "none" }} disabled={uploading} />
           </label>
           <button style={S.ghostBtn} onClick={loadSample} disabled={uploading}>ou carregar dados de exemplo</button>
           {error && <div style={{ color: C.danger, fontSize: 12 }}>{error}</div>}
@@ -253,7 +253,7 @@ export default function FerramentaGestao({ goTo }) {
           <button style={S.ghostBtn} onClick={() => setShowSkus((s) => !s)}><List size={14} /> {showSkus ? "Ocultar SKUs" : "Ver por SKU"}</button>
           <label style={{ ...S.ghostBtn, cursor: "pointer" }}>
             <Upload size={14} /> {uploading ? "Enviando..." : "Nova planilha"}
-            <input type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} disabled={uploading} />
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} style={{ display: "none" }} disabled={uploading} />
           </label>
         </div>
       </div>

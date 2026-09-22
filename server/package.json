@@ -2,7 +2,9 @@
   "name": "done-platform-server",
   "version": "1.0.0",
   "type": "module",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
@@ -23,7 +25,8 @@
     "nodemailer": "^6.9.14",
     "papaparse": "^5.4.1",
     "stripe": "^16.8.0",
-    "twilio": "^5.2.3"
+    "twilio": "^5.2.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "prisma": "^5.18.0"

@@ -211,7 +211,7 @@ export default function Dre({ goTo }) {
         </button>
         <label style={{ ...S.ghostBtn, cursor: "pointer" }}>
           <Upload size={14} /> {uploading ? "Enviando..." : "Subir planilha"}
-          <input type="file" accept=".csv" onChange={handleUpload} style={{ display: "none" }} disabled={uploading} />
+          <input type="file" accept=".csv,.xlsx,.xls" onChange={handleUpload} style={{ display: "none" }} disabled={uploading} />
         </label>
       </div>
 

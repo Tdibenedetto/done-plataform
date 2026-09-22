@@ -1,9 +1,9 @@
 import { Router } from "express";
 import multer from "multer";
-import Papa from "papaparse";
 import { prisma } from "../lib/prisma.js";
 import { requireMaster, requireAddon } from "../middleware/auth.js";
 import { mapDreColumns, normalizeMesAno, normalizeDreType } from "../lib/claude.js";
+import { parseSpreadsheet } from "../lib/spreadsheet.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -54,26 +54,24 @@ router.put("/saldo-inicial", async (req, res) => {
 router.post("/upload", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado." });
 
-  const text = req.file.buffer.toString("utf-8");
-  const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-  if (parsed.errors.length) return res.status(400).json({ error: "Não foi possível ler o CSV.", details: parsed.errors });
-  if (!parsed.data.length) return res.status(400).json({ error: "A planilha está vazia." });
+  const { headers, data, errors } = parseSpreadsheet(req.file.buffer, req.file.originalname);
+  if (errors.length) return res.status(400).json({ error: "Não foi possível ler a planilha.", details: errors });
+  if (!data.length) return res.status(400).json({ error: "A planilha está vazia." });
 
-  const headers = parsed.meta.fields || [];
   const headersMatch = CANONICAL_HEADERS.every((h) => headers.includes(h));
 
   let rows;
   let mappingUsed = null;
 
   if (headersMatch) {
-    rows = parsed.data.map((r) => ({
+    rows = data.map((r) => ({
       mes: normalizeMesAno(r.mes),
       tipo: TYPES.includes(String(r.tipo).toLowerCase()) ? String(r.tipo).toLowerCase() : normalizeDreType(r.tipo),
       categoria: r.categoria || "Sem categoria",
       valor: Number(String(r.valor).replace(/[^\d.,-]/g, "").replace(",", ".")) || 0,
     }));
   } else {
-    const sample = parsed.data.slice(0, 3);
+    const sample = data.slice(0, 3);
     const mapping = await mapDreColumns(headers, sample);
     if (!mapping || !mapping.valor) {
       return res.status(400).json({
@@ -81,7 +79,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       });
     }
     mappingUsed = mapping;
-    rows = parsed.data.map((r) => ({
+    rows = data.map((r) => ({
       mes: normalizeMesAno(mapping.mes ? r[mapping.mes] : ""),
       tipo: normalizeDreType(mapping.tipo ? r[mapping.tipo] : ""),
       categoria: mapping.categoria ? r[mapping.categoria] : "Sem categoria",

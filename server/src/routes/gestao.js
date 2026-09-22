@@ -1,9 +1,9 @@
 import { Router } from "express";
 import multer from "multer";
-import Papa from "papaparse";
 import { prisma } from "../lib/prisma.js";
 import { requireMaster, requirePlan } from "../middleware/auth.js";
 import { mapSpreadsheetColumns, normalizeMes, normalizeMargem, normalizeEstoque } from "../lib/claude.js";
+import { parseSpreadsheet } from "../lib/spreadsheet.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -18,16 +18,14 @@ const CANONICAL_HEADERS = ["mes", "categoria", "produto", "sku", "valor", "marge
 router.post("/upload", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado." });
 
-  const text = req.file.buffer.toString("utf-8");
-  const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-  if (parsed.errors.length) {
-    return res.status(400).json({ error: "Não foi possível ler o CSV.", details: parsed.errors });
+  const { headers, data, errors } = parseSpreadsheet(req.file.buffer, req.file.originalname);
+  if (errors.length) {
+    return res.status(400).json({ error: "Não foi possível ler a planilha.", details: errors });
   }
-  if (!parsed.data.length) {
+  if (!data.length) {
     return res.status(400).json({ error: "A planilha está vazia." });
   }
 
-  const headers = parsed.meta.fields || [];
   const headersMatch = CANONICAL_HEADERS.every((h) => headers.includes(h));
 
   let rows;
@@ -35,14 +33,14 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 
   if (headersMatch) {
     // Caminho rápido: já está no formato esperado — sem chamar a IA.
-    rows = parsed.data.map((r) => ({
+    rows = data.map((r) => ({
       mes: r.mes, categoria: r.categoria, produto: r.produto, sku: r.sku,
       valor: Number(r.valor) || 0, margem: Number(r.margem) || 0,
       estoque: (r.estoque || "ok").toLowerCase(),
     }));
   } else {
     // Formato diferente — pede pra IA identificar quais colunas correspondem a quê.
-    const sample = parsed.data.slice(0, 3);
+    const sample = data.slice(0, 3);
     const mapping = await mapSpreadsheetColumns(headers, sample);
 
     if (!mapping || !mapping.produto || !mapping.valor) {
@@ -51,7 +49,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       });
     }
     mappingUsed = mapping;
-    rows = parsed.data.map((r) => ({
+    rows = data.map((r) => ({
       mes: normalizeMes(mapping.mes ? r[mapping.mes] : ""),
       categoria: mapping.categoria ? r[mapping.categoria] : "Sem categoria",
       produto: mapping.produto ? r[mapping.produto] : "",
