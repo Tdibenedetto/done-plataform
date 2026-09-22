@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -26,6 +26,14 @@ export default function FerramentaGestao({ goTo }) {
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [showSkus, setShowSkus] = useState(false);
+  const skuSectionRef = useRef(null);
+  useEffect(() => {
+    // O botão fica no topo da tela, mas a tabela de SKUs some lá embaixo, depois dos
+    // cards e do gráfico — sem isso, parecia que o clique "não fazia nada".
+    if (showSkus && skuSectionRef.current) {
+      skuSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [showSkus]);
   const [mapNotice, setMapNotice] = useState(null);
   const [locked, setLocked] = useState(false);
   const [lockMessage, setLockMessage] = useState(null);
@@ -378,7 +386,7 @@ export default function FerramentaGestao({ goTo }) {
       )}
 
       {showSkus && (
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
+        <div ref={skuSectionRef} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5, marginBottom: 12 }}>Todos os SKUs (histórico combinado)</div>
           <div style={{ overflowX: "auto" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 620 }}>
