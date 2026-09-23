@@ -32,7 +32,7 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, value, assignedUserId, expectedCloseDate, categoria } = req.body;
+  const { name, value, assignedUserId, expectedCloseDate, categoria, clienteId } = req.body;
   if (!name) return res.status(400).json({ error: "Nome do lead é obrigatório." });
 
   // Membro só cria lead para si mesmo; Master pode atribuir a qualquer um do time.
@@ -43,10 +43,16 @@ router.post("/", async (req, res) => {
     ownerId = assignedUserId;
   }
 
+  if (clienteId) {
+    const cliente = await prisma.cliente.findFirst({ where: { id: clienteId, organizationId: req.organizationId } });
+    if (!cliente) return res.status(400).json({ error: "Cliente inválido." });
+  }
+
   const lead = await prisma.lead.create({
     data: {
       organizationId: req.organizationId,
       assignedUserId: ownerId,
+      clienteId: clienteId || null,
       name,
       value: Number(value) || 0,
       expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null,
@@ -62,7 +68,7 @@ router.post("/", async (req, res) => {
 });
 
 router.patch("/:id", async (req, res) => {
-  const { stage, lostReason, expectedCloseDate, categoria, margemReal, value } = req.body;
+  const { stage, lostReason, expectedCloseDate, categoria, margemReal, value, clienteId } = req.body;
   if (stage && !STAGES.includes(stage)) return res.status(400).json({ error: "Etapa inválida." });
   if (value !== undefined && (isNaN(Number(value)) || Number(value) < 0)) {
     return res.status(400).json({ error: "Valor inválido." });
@@ -78,6 +84,28 @@ router.patch("/:id", async (req, res) => {
   if (categoria !== undefined) data.categoria = categoria || null;
   if (margemReal !== undefined) data.margemReal = margemReal === null || margemReal === "" ? null : Number(margemReal);
   if (value !== undefined) data.value = Number(value);
+
+  if (clienteId !== undefined) {
+    if (clienteId) {
+      const cliente = await prisma.cliente.findFirst({ where: { id: clienteId, organizationId: req.organizationId } });
+      if (!cliente) return res.status(400).json({ error: "Cliente inválido." });
+    }
+    data.clienteId = clienteId || null;
+  }
+
+  // Cliente bloqueado (gestão de crédito) não pode ter lead fechado sem aprovação manual —
+  // aqui é só a trava automática; "aprovação manual" hoje significa desbloquear o cliente primeiro.
+  if (stage === "Fechado") {
+    const targetClienteId = clienteId !== undefined ? clienteId : existing.clienteId;
+    if (targetClienteId) {
+      const cliente = await prisma.cliente.findUnique({ where: { id: targetClienteId } });
+      if (cliente?.status === "bloqueado") {
+        return res.status(402).json({
+          error: `Cliente bloqueado por crédito${cliente.statusMotivo ? `: ${cliente.statusMotivo}` : "."} Desbloqueie o cliente na Análise de Crédito antes de fechar este lead.`,
+        });
+      }
+    }
+  }
 
   await prisma.lead.update({ where: { id: existing.id }, data });
 

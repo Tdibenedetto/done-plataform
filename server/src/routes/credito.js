@@ -95,10 +95,21 @@ router.post("/cnpj", async (req, res) => {
     return res.status(502).json({ error: "Não foi possível consultar o CNPJ agora — verifique sua conexão e tente de novo." });
   }
 
+  const razaoSocial = data.razao_social || data.nome_fantasia || clean;
+
+  // Encontra o Cliente já existente com esse CNPJ nesta organização, ou cria um novo —
+  // é o vínculo que faz Vendas e Crédito falarem da mesma empresa, em vez de cada um ter
+  // seu próprio "nome" solto sem relação entre si.
+  let cliente = await prisma.cliente.findUnique({ where: { organizationId_cnpj: { organizationId: req.organizationId, cnpj: clean } } });
+  if (!cliente) {
+    cliente = await prisma.cliente.create({ data: { organizationId: req.organizationId, cnpj: clean, razaoSocial } });
+  }
+
   const record = await prisma.creditAnalysis.create({
     data: {
       organizationId: req.organizationId,
       requestedById: req.userId,
+      clienteId: cliente.id,
       cnpj: clean,
       companyName: data.razao_social || data.nome_fantasia || null,
       situacao: data.descricao_situacao_cadastral || null,
@@ -132,6 +143,13 @@ router.post("/:id/balanco", upload.single("file"), async (req, res) => {
       status: resultado.status, limiteSugerido: resultado.limiteSugerido, motivoRecusa: resultado.motivoRecusa,
     },
   });
+
+  // Atualiza só a SUGESTÃO da IA no Cliente — o limite aprovado de verdade só muda quando
+  // alguém aceita ou ajusta manualmente (rota /api/clientes/:id/limite), nunca automático aqui.
+  if (analysis.clienteId && resultado.limiteSugerido != null) {
+    await prisma.cliente.update({ where: { id: analysis.clienteId }, data: { creditoSugeridoIA: resultado.limiteSugerido } });
+  }
+
   res.json(updated);
 });
 

@@ -19,6 +19,7 @@ model Organization {
   users         User[]
   invites       Invite[]
   leads         Lead[]
+  clientes      Cliente[]
   goals         Goal[]
   coachResults  CoachResult[]
   gestaoUploads GestaoUpload[]
@@ -91,6 +92,8 @@ model Lead {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   assignedUserId String?
   assignedUser   User?        @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  clienteId      String?      // vínculo opcional com o Cliente (Gestão de Crédito) — nulo em leads antigos, sem CNPJ associado ainda
+  cliente        Cliente?     @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   name           String
   phone          String?      // telefone de contato — preenchido manualmente ou automaticamente (captação via WhatsApp)
   source         String       @default("manual") // "manual" | "whatsapp" — de onde este lead veio
@@ -108,6 +111,7 @@ model Lead {
 
   @@index([organizationId])
   @@index([assignedUserId])
+  @@index([clienteId])
 }
 
 model InvoiceEvent {
@@ -173,6 +177,8 @@ model CreditAnalysis {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   requestedById  String
   requestedBy    User         @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+  clienteId      String?      // vínculo com o Cliente (Gestão de Crédito) — cada análise nova encontra ou cria o Cliente pelo CNPJ
+  cliente        Cliente?     @relation(fields: [clienteId], references: [id], onDelete: SetNull)
 
   cnpj         String
   companyName  String?
@@ -199,6 +205,47 @@ model CreditAnalysis {
   createdAt DateTime @default(now())
 
   @@index([organizationId])
+  @@index([clienteId])
+}
+
+// Entidade compartilhada entre Vendas e Análise de Crédito — antes, um Lead (Vendas) e uma
+// CreditAnalysis (Crédito) não sabiam que eram a mesma empresa, cada um com seu "nome" solto.
+// Cliente é o vínculo: um CNPJ, com histórico de negociações (Leads) e de limite de crédito.
+model Cliente {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cnpj           String
+  razaoSocial    String
+  status         String   @default("ativo") // "ativo" | "atrasado" | "bloqueado"
+  statusMotivo   String?
+  creditoAprovado    Float?   // limite atual, editável — a IA sugere, o usuário aprova ou digita outro valor
+  creditoSugeridoIA  Float?   // última sugestão da IA, mantida como referência mesmo após aprovação manual
+  // Faturamento anterior ao uso da plataforma (preenchido manualmente, uma vez) — não soma com o
+  // faturamento puxado de Vendas, que é automático a partir daqui em diante.
+  faturamentoAnteriorPlataforma Float @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  leads           Lead[]
+  creditAnalyses  CreditAnalysis[]
+  limiteHistorico LimiteHistorico[]
+
+  @@unique([organizationId, cnpj])
+  @@index([organizationId])
+}
+
+// Trilha de auditoria de mudanças de limite — nunca sobrescreve, sempre acrescenta uma linha nova.
+model LimiteHistorico {
+  id            String   @id @default(uuid())
+  clienteId     String
+  cliente       Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  valorAnterior Float?
+  valorNovo     Float
+  alteradoPor   String   // nome de quem alterou, ou "Sugestão IA" quando é a sugestão inicial
+  createdAt     DateTime @default(now())
+
+  @@index([clienteId])
 }
 
 model Subscription {
