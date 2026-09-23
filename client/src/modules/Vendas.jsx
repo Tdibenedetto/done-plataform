@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Plus, Trash2, UserPlus, X, Mail, MessageSquare, Calendar, Filter, TrendingUp, DollarSign, Briefcase, Phone, LineChart as LineChartIcon } from "lucide-react";
+import { Plus, Trash2, UserPlus, X, Mail, MessageSquare, Calendar, Filter, TrendingUp, DollarSign, Briefcase, Phone, LineChart as LineChartIcon, Lock } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
 
@@ -40,6 +40,7 @@ export default function FerramentaVendas({ goTo }) {
   const [invoiceBusy, setInvoiceBusy] = useState(false);
   const [openLead, setOpenLead] = useState(null);
   const [filters, setFilters] = useState({ assignedUserId: "", minValue: "", maxValue: "" });
+  const [moveError, setMoveError] = useState(null);
 
   const reload = useCallback(async () => {
     try {
@@ -99,13 +100,18 @@ export default function FerramentaVendas({ goTo }) {
   async function movePipeline(lead, dir) {
     const idx = PIPELINE_STAGES.indexOf(lead.stage);
     if (idx === -1) return; // já passou do pipeline normal
-    if (dir > 0 && idx === PIPELINE_STAGES.length - 1) {
-      await api.leadUpdate(lead.id, { stage: "Fechado" });
-    } else {
-      const next = PIPELINE_STAGES[Math.min(Math.max(idx + dir, 0), PIPELINE_STAGES.length - 1)];
-      await api.leadUpdate(lead.id, { stage: next });
+    setMoveError(null);
+    try {
+      if (dir > 0 && idx === PIPELINE_STAGES.length - 1) {
+        await api.leadUpdate(lead.id, { stage: "Fechado" });
+      } else {
+        const next = PIPELINE_STAGES[Math.min(Math.max(idx + dir, 0), PIPELINE_STAGES.length - 1)];
+        await api.leadUpdate(lead.id, { stage: next });
+      }
+      reload();
+    } catch (e) {
+      setMoveError(e.message);
     }
-    reload();
   }
   async function markLost(lead) {
     setLostFor(null);
@@ -169,6 +175,13 @@ export default function FerramentaVendas({ goTo }) {
           <button style={S.ghostBtn} onClick={() => setShowTeam((s) => !s)}><UserPlus size={14} /> {isMaster ? "Equipe" : "Meu contato"}</button>
         </div>
       </div>
+
+      {moveError && (
+        <div style={{ background: C.dangerSoft, borderRadius: 10, padding: "12px 16px", fontSize: 12.5, color: C.danger, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <span>⚠ {moveError}</span>
+          <button onClick={() => setMoveError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: C.danger, flexShrink: 0 }}><X size={14} /></button>
+        </div>
+      )}
 
       {showTeam && <TeamPanel team={team} isMaster={isMaster} onChange={reload} />}
       {showForecast && <ForecastPanel leads={leads} />}
@@ -249,6 +262,12 @@ export default function FerramentaVendas({ goTo }) {
                         </span>
                       )}
                     </div>
+
+                    {l.cliente?.status === "bloqueado" && (
+                      <div style={{ fontSize: 9.5, fontWeight: 700, color: C.danger, background: C.dangerSoft, borderRadius: 6, padding: "4px 7px", display: "flex", alignItems: "center", gap: 4 }} title={l.cliente.statusMotivo || "Cliente bloqueado por crédito"}>
+                        <Lock size={10} /> Crédito bloqueado
+                      </div>
+                    )}
 
                     {stage === "Carteira" ? (
                       <>

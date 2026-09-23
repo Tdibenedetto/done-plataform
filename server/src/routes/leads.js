@@ -25,6 +25,7 @@ router.get("/", async (req, res) => {
       assignedUser: { select: { id: true, name: true } },
       _count: { select: { notes: true } },
       invoiceEvents: { select: { id: true, amount: true, date: true }, orderBy: { date: "asc" } },
+      cliente: { select: { id: true, status: true, statusMotivo: true } },
     },
     orderBy: { createdAt: "asc" },
   });

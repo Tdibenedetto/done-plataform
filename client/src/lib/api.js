@@ -77,6 +77,12 @@ Object.assign(api, {
   leadInvoice: (id, amount) => request(`/leads/${id}/invoice`, { method: "POST", body: { amount } }),
   creditoList: () => request("/credito"),
   creditoCnpj: (cnpj) => request("/credito/cnpj", { method: "POST", body: { cnpj } }),
+  clientesList: () => request("/clientes"),
+  clientesGet: (id) => request(`/clientes/${id}`),
+  clientesCreate: (cnpj, razaoSocial) => request("/clientes", { method: "POST", body: { cnpj, razaoSocial } }),
+  clientesSetLimite: (id, novoLimite) => request(`/clientes/${id}/limite`, { method: "PUT", body: { novoLimite } }),
+  clientesSetStatus: (id, status, motivo) => request(`/clientes/${id}/status`, { method: "PUT", body: { status, motivo } }),
+  clientesSetFaturamentoAnterior: (id, valor) => request(`/clientes/${id}/faturamento-anterior`, { method: "PUT", body: { valor } }),
   creditoBalanco: (id, file) => {
     const form = new FormData();
     form.append("file", file);

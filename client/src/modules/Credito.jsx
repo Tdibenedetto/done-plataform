@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { CreditCard, Search, Upload, CheckCircle2, XCircle, Building2, History, Bell, BellOff, AlertTriangle } from "lucide-react";
+import { CreditCard, Search, Upload, CheckCircle2, XCircle, Building2, History, Bell, BellOff, AlertTriangle, Users } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
+import ClientesPanel from "./Clientes.jsx";
 
 const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
@@ -15,6 +16,7 @@ export default function Credito({ goTo }) {
   const [current, setCurrent] = useState(null); // análise ativa sendo trabalhada
   const [uploadingBalanco, setUploadingBalanco] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [view, setView] = useState("consultas"); // "consultas" | "clientes"
   const [granting, setGranting] = useState(false);
   const [togglingMonitor, setTogglingMonitor] = useState(false);
   const [testingMonitor, setTestingMonitor] = useState(false);
@@ -150,9 +152,20 @@ export default function Credito({ goTo }) {
               {testingMonitor ? "Checando..." : "Testar monitoramento agora"}
             </button>
           )}
-          <button style={S.ghostBtn} onClick={() => setShowHistory((s) => !s)}><History size={14} /> Histórico</button>
+          <button
+            style={view === "clientes" ? { ...S.ghostBtn, background: C.ink, color: "#fff", borderColor: C.ink } : S.ghostBtn}
+            onClick={() => setView((v) => (v === "clientes" ? "consultas" : "clientes"))}
+          >
+            <Users size={14} /> {view === "clientes" ? "Voltar às consultas" : "Clientes"}
+          </button>
+          {view === "consultas" && <button style={S.ghostBtn} onClick={() => setShowHistory((s) => !s)}><History size={14} /> Histórico</button>}
         </div>
       </div>
+
+      {view === "clientes" ? (
+        <ClientesPanel />
+      ) : (
+        <>
 
       {monitorTestMsg && <div style={{ fontSize: 12, color: C.inkSoft }}>{monitorTestMsg}</div>}
 
@@ -281,6 +294,8 @@ export default function Credito({ goTo }) {
             </div>
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   );
