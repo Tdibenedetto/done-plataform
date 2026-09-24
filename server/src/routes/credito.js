@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { extractFinancials } from "../lib/claude.js";
 import { requirePlan, requireMaster } from "../middleware/auth.js";
 import { runCnpjMonitorCheck } from "../jobs/monitorCnpj.js";
+import { findOrCreateCliente } from "../lib/clientes.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -100,10 +101,7 @@ router.post("/cnpj", async (req, res) => {
   // Encontra o Cliente já existente com esse CNPJ nesta organização, ou cria um novo —
   // é o vínculo que faz Vendas e Crédito falarem da mesma empresa, em vez de cada um ter
   // seu próprio "nome" solto sem relação entre si.
-  let cliente = await prisma.cliente.findUnique({ where: { organizationId_cnpj: { organizationId: req.organizationId, cnpj: clean } } });
-  if (!cliente) {
-    cliente = await prisma.cliente.create({ data: { organizationId: req.organizationId, cnpj: clean, razaoSocial } });
-  }
+  const { cliente } = await findOrCreateCliente(req.organizationId, clean, razaoSocial);
 
   const record = await prisma.creditAnalysis.create({
     data: {

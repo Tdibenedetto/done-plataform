@@ -32,7 +32,7 @@ export default function FerramentaVendas({ goTo }) {
   const [showAnnual, setShowAnnual] = useState(false);
   const [showCarteira, setShowCarteira] = useState(false);
   const [showForecast, setShowForecast] = useState(false);
-  const [draft, setDraft] = useState({ name: "", value: "", assignedUserId: "", expectedCloseDate: "", categoria: "" });
+  const [draft, setDraft] = useState({ name: "", value: "", assignedUserId: "", expectedCloseDate: "", categoria: "", cnpj: "" });
   const [lostFor, setLostFor] = useState(null);
   const [lostReason, setLostReason] = useState("");
   const [invoiceFor, setInvoiceFor] = useState(null); // lead sendo faturado agora
@@ -86,16 +86,21 @@ export default function FerramentaVendas({ goTo }) {
 
   async function addLead() {
     if (!draft.name.trim()) return;
-    await api.leadCreate({
-      name: draft.name,
-      value: Number(draft.value) || 0,
-      assignedUserId: draft.assignedUserId || undefined,
-      expectedCloseDate: draft.expectedCloseDate || undefined,
-      categoria: draft.categoria || undefined,
-    });
-    setDraft({ name: "", value: "", assignedUserId: "", expectedCloseDate: "", categoria: "" });
-    setShowForm(false);
-    reload();
+    try {
+      await api.leadCreate({
+        name: draft.name,
+        value: Number(draft.value) || 0,
+        assignedUserId: draft.assignedUserId || undefined,
+        expectedCloseDate: draft.expectedCloseDate || undefined,
+        categoria: draft.categoria || undefined,
+        cnpj: draft.cnpj || undefined,
+      });
+      setDraft({ name: "", value: "", assignedUserId: "", expectedCloseDate: "", categoria: "", cnpj: "" });
+      setShowForm(false);
+      reload();
+    } catch (e) {
+      setMoveError(e.message);
+    }
   }
   async function movePipeline(lead, dir) {
     const idx = PIPELINE_STAGES.indexOf(lead.stage);
@@ -210,6 +215,7 @@ export default function FerramentaVendas({ goTo }) {
       {showForm && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input style={{ ...S.input, flex: 1, minWidth: 160 }} placeholder="Nome do cliente" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+          <input style={{ ...S.input, width: 160 }} placeholder="CNPJ (opcional)" value={draft.cnpj} onChange={(e) => setDraft({ ...draft, cnpj: e.target.value })} title="Vincula este lead ao cadastro de crédito da empresa" />
           <input style={{ ...S.input, width: 150 }} placeholder="Valor (R$)" value={draft.value} onChange={(e) => setDraft({ ...draft, value: e.target.value })} />
           <input style={{ ...S.input, width: 160 }} type="date" value={draft.expectedCloseDate} onChange={(e) => setDraft({ ...draft, expectedCloseDate: e.target.value })} />
           <input style={{ ...S.input, width: 150 }} placeholder="Categoria (opcional)" value={draft.categoria} onChange={(e) => setDraft({ ...draft, categoria: e.target.value })} />
@@ -400,6 +406,8 @@ function LeadDetailModal({ lead, onClose }) {
   const [busy, setBusy] = useState(false);
   const [closeDate, setCloseDate] = useState(lead.expectedCloseDate ? lead.expectedCloseDate.slice(0, 10) : "");
   const [categoria, setCategoria] = useState(lead.categoria || "");
+  const [cnpj, setCnpj] = useState(lead.cliente?.cnpj || "");
+  const [cnpjMsg, setCnpjMsg] = useState(null);
   const [margemReal, setMargemReal] = useState(lead.margemReal ?? "");
   const [value, setValue] = useState(lead.value ?? "");
   const [valueMsg, setValueMsg] = useState(null);
@@ -427,6 +435,15 @@ function LeadDetailModal({ lead, onClose }) {
   }
   async function saveCategoria() {
     await api.leadUpdate(lead.id, { categoria: categoria || null });
+  }
+  async function saveCnpj() {
+    setCnpjMsg(null);
+    try {
+      await api.leadUpdate(lead.id, { cnpj: cnpj || null });
+      setCnpjMsg(cnpj ? "Vinculado." : "Desvinculado.");
+    } catch (e) {
+      setCnpjMsg(e.message);
+    }
   }
   async function saveMargem() {
     await api.leadUpdate(lead.id, { margemReal: margemReal === "" ? null : margemReal });
@@ -485,6 +502,18 @@ function LeadDetailModal({ lead, onClose }) {
           <span style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Categoria do produto</span>
           <input style={{ ...S.input, padding: "6px 10px", fontSize: 12, flex: 1 }} placeholder="Ex: Utilidades Domésticas" value={categoria} onChange={(e) => setCategoria(e.target.value)} onBlur={saveCategoria} />
         </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+          <span style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>CNPJ do cliente</span>
+          <input style={{ ...S.input, padding: "6px 10px", fontSize: 12, flex: 1 }} placeholder="00.000.000/0000-00" value={cnpj} onChange={(e) => setCnpj(e.target.value)} onBlur={saveCnpj} />
+          {lead.cliente?.status && (
+            <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 99, flexShrink: 0, background: lead.cliente.status === "bloqueado" ? C.dangerSoft : lead.cliente.status === "atrasado" ? C.goldSoft : C.sageSoft, color: lead.cliente.status === "bloqueado" ? C.danger : lead.cliente.status === "atrasado" ? "#8A6423" : C.sage }}>
+              {lead.cliente.status === "bloqueado" ? "Bloqueado" : lead.cliente.status === "atrasado" ? "Atrasado" : "Ativo"}
+            </span>
+          )}
+        </div>
+        {cnpjMsg && <div style={{ fontSize: 10.5, color: cnpjMsg.includes("inválido") || cnpjMsg.includes("Inválido") ? C.danger : C.muted, marginTop: 3 }}>{cnpjMsg}</div>}
+        <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>Vincula este lead à Análise de Crédito da empresa — se o CNPJ já existir, conecta; se não, cria um cadastro novo.</div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
           <span style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Margem real (%)</span>

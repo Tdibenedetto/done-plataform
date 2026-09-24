@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requirePlan } from "../middleware/auth.js";
+import { findOrCreateCliente } from "../lib/clientes.js";
 
 const router = Router();
 const STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação", "Fechado", "Carteira", "Faturado Total", "Perdido"];
@@ -33,7 +34,7 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, value, assignedUserId, expectedCloseDate, categoria, clienteId } = req.body;
+  const { name, value, assignedUserId, expectedCloseDate, categoria, clienteId, cnpj } = req.body;
   if (!name) return res.status(400).json({ error: "Nome do lead é obrigatório." });
 
   // Membro só cria lead para si mesmo; Master pode atribuir a qualquer um do time.
@@ -44,16 +45,24 @@ router.post("/", async (req, res) => {
     ownerId = assignedUserId;
   }
 
-  if (clienteId) {
+  let finalClienteId = null;
+  if (cnpj) {
+    // Vincula pelo CNPJ — encontra o Cliente já existente, ou cria um novo usando o nome do
+    // lead como razão social provisória (até alguém rodar uma Análise de Crédito de verdade).
+    const { cliente, error: cnpjError } = await findOrCreateCliente(req.organizationId, cnpj, name);
+    if (cnpjError) return res.status(400).json({ error: cnpjError });
+    finalClienteId = cliente.id;
+  } else if (clienteId) {
     const cliente = await prisma.cliente.findFirst({ where: { id: clienteId, organizationId: req.organizationId } });
     if (!cliente) return res.status(400).json({ error: "Cliente inválido." });
+    finalClienteId = clienteId;
   }
 
   const lead = await prisma.lead.create({
     data: {
       organizationId: req.organizationId,
       assignedUserId: ownerId,
-      clienteId: clienteId || null,
+      clienteId: finalClienteId,
       name,
       value: Number(value) || 0,
       expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null,
@@ -63,13 +72,14 @@ router.post("/", async (req, res) => {
       assignedUser: { select: { id: true, name: true } },
       _count: { select: { notes: true } },
       invoiceEvents: true,
+      cliente: { select: { id: true, cnpj: true, status: true, statusMotivo: true } },
     },
   });
   res.json(lead);
 });
 
 router.patch("/:id", async (req, res) => {
-  const { stage, lostReason, expectedCloseDate, categoria, margemReal, value, clienteId } = req.body;
+  const { stage, lostReason, expectedCloseDate, categoria, margemReal, value, clienteId, cnpj } = req.body;
   if (stage && !STAGES.includes(stage)) return res.status(400).json({ error: "Etapa inválida." });
   if (value !== undefined && (isNaN(Number(value)) || Number(value) < 0)) {
     return res.status(400).json({ error: "Valor inválido." });
@@ -86,7 +96,15 @@ router.patch("/:id", async (req, res) => {
   if (margemReal !== undefined) data.margemReal = margemReal === null || margemReal === "" ? null : Number(margemReal);
   if (value !== undefined) data.value = Number(value);
 
-  if (clienteId !== undefined) {
+  if (cnpj !== undefined) {
+    if (cnpj) {
+      const { cliente, error: cnpjError } = await findOrCreateCliente(req.organizationId, cnpj, existing.name);
+      if (cnpjError) return res.status(400).json({ error: cnpjError });
+      data.clienteId = cliente.id;
+    } else {
+      data.clienteId = null; // cnpj enviado vazio = desvincular
+    }
+  } else if (clienteId !== undefined) {
     if (clienteId) {
       const cliente = await prisma.cliente.findFirst({ where: { id: clienteId, organizationId: req.organizationId } });
       if (!cliente) return res.status(400).json({ error: "Cliente inválido." });
@@ -97,7 +115,7 @@ router.patch("/:id", async (req, res) => {
   // Cliente bloqueado (gestão de crédito) não pode ter lead fechado sem aprovação manual —
   // aqui é só a trava automática; "aprovação manual" hoje significa desbloquear o cliente primeiro.
   if (stage === "Fechado") {
-    const targetClienteId = clienteId !== undefined ? clienteId : existing.clienteId;
+    const targetClienteId = data.clienteId !== undefined ? data.clienteId : existing.clienteId;
     if (targetClienteId) {
       const cliente = await prisma.cliente.findUnique({ where: { id: targetClienteId } });
       if (cliente?.status === "bloqueado") {
