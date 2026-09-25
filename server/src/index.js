@@ -24,7 +24,20 @@ import { runWeeklyReportCheck } from "./jobs/weeklyReport.js";
 
 const app = express();
 
-app.use(cors({ origin: process.env.CLIENT_URL || "*" }));
+// Aceita o domínio principal configurado (CLIENT_URL) e também qualquer subdomínio/preview
+// do Render (*.onrender.com) — sem isso, testar por um endereço diferente do CLIENT_URL
+// configurado (ex: o link .onrender.com "de fábrica", em vez do domínio próprio) ficava
+// bloqueado silenciosamente, sem nenhum erro claro pro usuário final.
+const allowedOrigins = [process.env.CLIENT_URL, "https://done-client.onrender.com"].filter(Boolean);
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin) return callback(null, true); // requisições sem origin (ex: curl, apps mobile)
+    if (allowedOrigins.includes(origin) || /\.onrender\.com$/.test(new URL(origin).hostname)) {
+      return callback(null, true);
+    }
+    callback(new Error("Origem não permitida por CORS."));
+  },
+}));
 
 // Stripe webhook needs the raw body — mount it BEFORE express.json().
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
