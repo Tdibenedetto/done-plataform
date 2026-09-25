@@ -127,6 +127,7 @@ export default function AdminOverview() {
       <TrialLinkGenerator clients={clients} />
       <WhatsappNumberAssigner clients={clients} />
       <ManageClientPanel clients={clients} onChanged={reload} />
+      <BackfillClientesPanel />
 
       <div className="done-two-col-grid" style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 16 }}>
         <div style={S.qCard}>
@@ -387,6 +388,40 @@ function ManageClientPanel({ clients, onChanged }) {
 
       {error && <div style={{ fontSize: 12, color: C.danger }}>{error}</div>}
       {success && <div style={{ fontSize: 12, color: C.sage }}>{success}</div>}
+    </div>
+  );
+}
+
+function BackfillClientesPanel() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  async function run() {
+    setBusy(true); setError(null); setResult(null);
+    try {
+      const r = await api.adminBackfillClientes();
+      setResult(r);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={S.qCard}>
+      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14.5, color: C.ink }}>Conectar análises de crédito antigas</div>
+      <div style={{ fontSize: 12, color: C.muted, marginTop: -6 }}>
+        Análises feitas antes do Cliente existir (com limite sugerido "perdido"). Roda uma vez, e só afeta o que ainda não tem cliente vinculado — seguro rodar de novo se precisar.
+      </div>
+      <button style={S.primaryBtnSm} disabled={busy} onClick={run}>{busy ? "Conectando..." : "Rodar agora"}</button>
+      {error && <div style={{ fontSize: 12, color: C.danger }}>{error}</div>}
+      {result && (
+        <div style={{ fontSize: 12, color: C.sage }}>
+          {result.gruposEncontrados} cliente(s) encontrado(s) · {result.clientesCriados} criado(s) · {result.clientesAtualizados} com sugestão de limite atualizada · {result.analisesVinculadas} análise(s) vinculada(s)
+        </div>
+      )}
     </div>
   );
 }

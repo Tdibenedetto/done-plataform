@@ -118,5 +118,6 @@ Object.assign(api, {
   adminSetWhatsappNumber: (organizationId, whatsappNumber) => request(`/admin/clients/${organizationId}/whatsapp-number`, { method: "PUT", body: { whatsappNumber } }),
   adminRenameClient: (organizationId, name) => request(`/admin/clients/${organizationId}/rename`, { method: "PUT", body: { name } }),
   adminDeleteClient: (organizationId, confirmName) => request(`/admin/clients/${organizationId}`, { method: "DELETE", body: { confirmName } }),
+  adminBackfillClientes: () => request("/admin/backfill-clientes", { method: "POST" }),
 });
 

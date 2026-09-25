@@ -204,4 +204,56 @@ router.delete("/clients/:organizationId", async (req, res) => {
   res.json({ deleted: true });
 });
 
+// -------- Backfill: conecta análises de crédito antigas (de antes do Cliente existir) --------
+// Análises feitas antes da entidade Cliente ser criada ficaram "soltas" — sem clienteId.
+// Isso varre todas elas, agrupa por CNPJ dentro de cada organização, encontra ou cria o
+// Cliente correspondente, vincula todas as análises daquele CNPJ a ele, e traz a sugestão
+// de limite da análise mais recente (a que tiver limiteSugerido preenchido) — sem isso, um
+// cliente com análise antiga aparecia com o limite sugerido "perdido", mesmo já tendo sido
+// calculado antes.
+router.post("/backfill-clientes", async (req, res) => {
+  const orphans = await prisma.creditAnalysis.findMany({
+    where: { clienteId: null },
+    orderBy: { createdAt: "desc" }, // mais recente primeiro, dentro de cada grupo
+  });
+
+  const groups = new Map(); // chave: organizationId + "|" + cnpj
+  for (const a of orphans) {
+    const key = `${a.organizationId}|${a.cnpj}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(a);
+  }
+
+  let clientesCriados = 0, clientesAtualizados = 0, analisesVinculadas = 0;
+
+  for (const [key, analyses] of groups) {
+    const [organizationId, cnpj] = key.split("|");
+    const mostRecent = analyses[0]; // já ordenado desc
+
+    let cliente = await prisma.cliente.findUnique({ where: { organizationId_cnpj: { organizationId, cnpj } } });
+    if (!cliente) {
+      cliente = await prisma.cliente.create({
+        data: { organizationId, cnpj, razaoSocial: mostRecent.companyName || cnpj },
+      });
+      clientesCriados++;
+    }
+
+    // A sugestão vem da análise mais recente que de fato tem um limite calculado —
+    // nem toda análise antiga passou pela etapa de upload de balanço.
+    const withLimite = analyses.find((a) => a.limiteSugerido != null);
+    if (withLimite && cliente.creditoSugeridoIA == null) {
+      await prisma.cliente.update({ where: { id: cliente.id }, data: { creditoSugeridoIA: withLimite.limiteSugerido } });
+      clientesAtualizados++;
+    }
+
+    await prisma.creditAnalysis.updateMany({
+      where: { id: { in: analyses.map((a) => a.id) } },
+      data: { clienteId: cliente.id },
+    });
+    analisesVinculadas += analyses.length;
+  }
+
+  res.json({ gruposEncontrados: groups.size, clientesCriados, clientesAtualizados, analisesVinculadas });
+});
+
 export default router;
