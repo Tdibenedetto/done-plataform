@@ -13,6 +13,8 @@ model Organization {
   plan      String?  // "vendas" | "gestao" | "completo" | null (sem assinatura ainda)
   whatsappNumber String? @unique // número de WhatsApp Business (E.164, sem prefixo "whatsapp:") desta organização, usado para captação automática de leads. Atribuído manualmente pelo Admin Geral após provisionar o número no Twilio.
   followUpDays Int   @default(3) // dias sem atualização até disparar lembrete automático
+  followUpError   String?   // última falha ao enviar lembrete automático (ex: Twilio sem perfil de conformidade aprovado) — limpa no próximo envio bem-sucedido
+  followUpErrorAt DateTime?
   lastWeeklyReportAt DateTime? // controla o envio do relatório semanal por e-mail (1x por semana)
   createdAt DateTime @default(now())
 

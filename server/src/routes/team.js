@@ -20,8 +20,8 @@ router.get("/", async (req, res) => {
     where: { organizationId: req.organizationId, status: "pending" },
     select: { id: true, email: true, createdAt: true, expiresAt: true },
   });
-  const org = await prisma.organization.findUnique({ where: { id: req.organizationId }, select: { followUpDays: true } });
-  res.json({ users, invites, maxTeamSize: MAX_TEAM_SIZE, followUpDays: org.followUpDays });
+  const org = await prisma.organization.findUnique({ where: { id: req.organizationId }, select: { followUpDays: true, followUpError: true, followUpErrorAt: true } });
+  res.json({ users, invites, maxTeamSize: MAX_TEAM_SIZE, followUpDays: org.followUpDays, followUpError: org.followUpError, followUpErrorAt: org.followUpErrorAt });
 });
 
 // Cada usuário define o próprio telefone (E.164), usado nos lembretes automáticos de follow-up.

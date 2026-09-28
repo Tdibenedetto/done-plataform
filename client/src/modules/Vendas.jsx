@@ -181,6 +181,14 @@ export default function FerramentaVendas({ goTo }) {
         </div>
       </div>
 
+      {isMaster && team?.followUpError && (
+        <div style={{ background: C.goldSoft, borderRadius: 10, padding: "12px 16px", fontSize: 12.5, color: "#8A6423", lineHeight: 1.5 }}>
+          <b>⚠ O follow-up automático não está sendo enviado.</b> {team.followUpError}
+          {team.followUpErrorAt && <span style={{ opacity: 0.8 }}> (última falha em {new Date(team.followUpErrorAt).toLocaleDateString("pt-BR")})</span>}
+          <div style={{ marginTop: 4 }}>Enquanto isso, os leads parados não geram lembrete para os vendedores.</div>
+        </div>
+      )}
+
       {moveError && (
         <div style={{ background: C.dangerSoft, borderRadius: 10, padding: "12px 16px", fontSize: 12.5, color: C.danger, fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <span>⚠ {moveError}</span>

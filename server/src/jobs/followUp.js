@@ -5,6 +5,23 @@ import { sendAlert, isTwilioConfigured } from "../lib/twilio.js";
 const MONTHLY_CAP_PER_ORG = 60; // teto de envios automáticos por organização/mês, para não sangrar o crédito Twilio
 const STALLED_STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação"]; // etapas que ainda estão "em jogo"
 
+// Falhas que valem para a conta inteira (não para um lead específico): insistir nos outros leads
+// só repetiria a mesma recusa. Também viram mensagem em português para o Master ver no Vendas.
+const ACCOUNT_LEVEL_ERROR = /compliance profile|trust hub|kyc|authenticate|unverified|not yet verified/i;
+
+function friendlyError(message = "") {
+  if (/compliance profile|trust hub|kyc/i.test(message)) {
+    return "O Twilio recusou o envio: a conta ainda não tem um perfil de conformidade (KYC) aprovado. Conclua no Twilio em Trust Hub → Profiles → Primary profile.";
+  }
+  if (/not yet verified|unverified/i.test(message)) {
+    return "O Twilio só envia para números verificados enquanto a conta não tiver um perfil de conformidade aprovado.";
+  }
+  if (/authenticate/i.test(message)) {
+    return "As credenciais do Twilio configuradas no servidor foram recusadas — confira TWILIO_ACCOUNT_SID e TWILIO_AUTH_TOKEN.";
+  }
+  return `O envio do lembrete falhou: ${message.slice(0, 160)}`;
+}
+
 function startOfMonth() {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -52,6 +69,9 @@ export async function runFollowUpCheck(options = {}) {
       include: { assignedUser: { select: { id: true, name: true, phone: true } } },
     });
 
+    let orgError = null;
+    let orgSent = 0;
+
     for (const lead of leads) {
       if (remaining <= 0) break;
 
@@ -73,9 +93,20 @@ export async function runFollowUpCheck(options = {}) {
         });
         remaining -= 1;
         totalSent += 1;
+        orgSent += 1;
       } catch (e) {
         console.error(`[followup] falha ao alertar lead ${lead.id} (${org.name}):`, e.message);
+        orgError = orgError || e.message;
+        if (ACCOUNT_LEVEL_ERROR.test(e.message)) break; // vale para a conta toda — não adianta tentar os demais
       }
+    }
+
+    // Registra na organização para o Master ver no Vendas (antes a falha só aparecia no log do servidor).
+    // Só limpa o aviso quando um envio realmente deu certo; sem leads tentados, mantém o estado anterior.
+    if (orgError && orgSent === 0) {
+      await prisma.organization.update({ where: { id: org.id }, data: { followUpError: friendlyError(orgError), followUpErrorAt: new Date() } });
+    } else if (orgSent > 0) {
+      await prisma.organization.update({ where: { id: org.id }, data: { followUpError: null, followUpErrorAt: null } });
     }
   }
 
