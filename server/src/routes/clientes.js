@@ -26,14 +26,19 @@ function computeExposicao(cliente) {
 
 function serializeCliente(cliente) {
   const faturadoEmAberto = computeExposicao(cliente);
-  const creditoDisponivel = cliente.creditoAprovado != null ? cliente.creditoAprovado - faturadoEmAberto : null;
+  // Dentro de um Grupo Econômico, o limite do GRUPO manda: o limite individual guardado aqui
+  // fica sem efeito, então não o mostramos nem calculamos "disponível" em cima dele.
+  const emGrupo = !!cliente.grupoEconomico;
+  const creditoAprovado = emGrupo ? null : cliente.creditoAprovado;
+  const creditoDisponivel = creditoAprovado != null ? creditoAprovado - faturadoEmAberto : null;
   return {
+    grupoEconomico: emGrupo ? { id: cliente.grupoEconomico.id, nome: cliente.grupoEconomico.nome } : null,
     id: cliente.id,
     cnpj: cliente.cnpj,
     razaoSocial: cliente.razaoSocial,
     status: cliente.status,
     statusMotivo: cliente.statusMotivo,
-    creditoAprovado: cliente.creditoAprovado,
+    creditoAprovado,
     creditoSugeridoIA: cliente.creditoSugeridoIA,
     faturamentoAnteriorPlataforma: cliente.faturamentoAnteriorPlataforma,
     faturadoEmAberto,
@@ -47,7 +52,7 @@ function serializeCliente(cliente) {
 router.get("/", async (req, res) => {
   const clientes = await prisma.cliente.findMany({
     where: { organizationId: req.organizationId },
-    include: { leads: { include: { invoiceEvents: true } } },
+    include: { leads: { include: { invoiceEvents: true } }, grupoEconomico: { select: { id: true, nome: true } } },
     orderBy: { razaoSocial: "asc" },
   });
   res.json(clientes.map(serializeCliente));
@@ -58,6 +63,7 @@ router.get("/:id", async (req, res) => {
   const cliente = await prisma.cliente.findFirst({
     where: { id: req.params.id, organizationId: req.organizationId },
     include: {
+      grupoEconomico: { select: { id: true, nome: true } },
       leads: { include: { invoiceEvents: true }, orderBy: { createdAt: "desc" } },
       limiteHistorico: { orderBy: { createdAt: "desc" } },
     },
@@ -92,6 +98,10 @@ router.post("/", async (req, res) => {
 router.put("/:id/limite", async (req, res) => {
   const cliente = await prisma.cliente.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
   if (!cliente) return res.status(404).json({ error: "Cliente não encontrado." });
+
+  if (cliente.grupoEconomicoId) {
+    return res.status(409).json({ error: "Este cliente faz parte de um Grupo Econômico — o limite é definido no grupo, não por CNPJ." });
+  }
 
   const novoLimite = Number(req.body.novoLimite);
   if (!Number.isFinite(novoLimite) || novoLimite < 0) return res.status(400).json({ error: "Informe um valor de limite válido." });
@@ -136,6 +146,20 @@ router.put("/:id/faturamento-anterior", async (req, res) => {
 
   await prisma.cliente.update({ where: { id: cliente.id }, data: { faturamentoAnteriorPlataforma: valor } });
   res.json({ ok: true, faturamentoAnteriorPlataforma: valor });
+});
+
+// -------- Entrar num Grupo Econômico (ou sair, enviando grupoEconomicoId vazio) --------
+router.put("/:id/grupo", async (req, res) => {
+  const cliente = await prisma.cliente.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
+  if (!cliente) return res.status(404).json({ error: "Cliente não encontrado." });
+
+  const { grupoEconomicoId } = req.body;
+  if (grupoEconomicoId) {
+    const grupo = await prisma.grupoEconomico.findFirst({ where: { id: grupoEconomicoId, organizationId: req.organizationId } });
+    if (!grupo) return res.status(400).json({ error: "Grupo inválido." });
+  }
+  await prisma.cliente.update({ where: { id: cliente.id }, data: { grupoEconomicoId: grupoEconomicoId || null } });
+  res.json({ ok: true });
 });
 
 export default router;

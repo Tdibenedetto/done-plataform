@@ -87,10 +87,17 @@ export default function ClientesPanel() {
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{c.cnpj}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", fontWeight: 700 }}>Disponível</div>
-                  <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, fontWeight: 700, color: C.sage }}>{fmtBRL(c.creditoDisponivel)}</div>
-                </div>
+                {c.grupoEconomico ? (
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", fontWeight: 700 }}>Grupo</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: C.gold }}>{c.grupoEconomico.nome}</div>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", fontWeight: 700 }}>Disponível</div>
+                    <div style={{ fontFamily: FONT_DISPLAY, fontSize: 14, fontWeight: 700, color: C.sage }}>{fmtBRL(c.creditoDisponivel)}</div>
+                  </div>
+                )}
                 <StatusBadge status={c.status} />
               </div>
             </button>
@@ -183,7 +190,7 @@ function ClienteDetail({ cliente, onBack, onChanged }) {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={S.ghostBtn} onClick={() => setEditingLimite((s) => !s)}>Editar limite</button>
+          {!cliente.grupoEconomico && <button style={S.ghostBtn} onClick={() => setEditingLimite((s) => !s)}>Editar limite</button>}
           {cliente.status === "bloqueado" ? (
             <button style={{ ...S.ghostBtn, borderColor: C.sage, color: C.sage }} disabled={busy} onClick={() => setStatus("ativo", null)}>
               <Unlock size={13} /> Desbloquear cliente
@@ -197,6 +204,8 @@ function ClienteDetail({ cliente, onBack, onChanged }) {
       </div>
 
       {error && <div style={{ fontSize: 12, color: C.danger }}>{error}</div>}
+
+      <GrupoSelector cliente={cliente} onChanged={onChanged} />
 
       {cliente.status !== "ativo" && cliente.statusMotivo && (
         <div style={{ background: C.dangerSoft, borderRadius: 10, padding: "12px 16px", fontSize: 12.5, color: C.danger, fontWeight: 600 }}>
@@ -229,9 +238,9 @@ function ClienteDetail({ cliente, onBack, onChanged }) {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-        <StatCard label="Limite Aprovado" value={fmtBRL(cliente.creditoAprovado)} />
+        <StatCard label="Limite Aprovado" value={cliente.grupoEconomico ? "No grupo" : fmtBRL(cliente.creditoAprovado)} sub={cliente.grupoEconomico ? "Definido em " + cliente.grupoEconomico.nome : undefined} />
         <StatCard label="Faturado em Aberto" value={fmtBRL(cliente.faturadoEmAberto)} sub="Puxado automaticamente de Vendas" color={C.gold} />
-        <StatCard label="Crédito Disponível" value={fmtBRL(cliente.creditoDisponivel)} color={C.sage} />
+        <StatCard label="Crédito Disponível" value={cliente.grupoEconomico ? "No grupo" : fmtBRL(cliente.creditoDisponivel)} sub={cliente.grupoEconomico ? "Veja na aba Grupos" : undefined} color={C.sage} />
         <StatCard label="Cliente desde" value={fmtDate(cliente.createdAt)} sub={`${cliente.leadsCount || 0} negociação(ões)`} />
       </div>
 
@@ -268,6 +277,42 @@ function ClienteDetail({ cliente, onBack, onChanged }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function GrupoSelector({ cliente, onChanged }) {
+  const [grupos, setGrupos] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => { api.gruposList().then(setGrupos).catch(() => setGrupos([])); }, []);
+
+  async function change(e) {
+    setBusy(true); setError(null);
+    try {
+      await api.clientesSetGrupo(cliente.id, e.target.value || null);
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <span style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Grupo econômico</span>
+      <select style={{ ...S.input, width: "auto", minWidth: 200, padding: "6px 10px", fontSize: 12 }} value={cliente.grupoEconomico?.id || ""} onChange={change} disabled={busy || grupos === null}>
+        <option value="">Sem grupo (CNPJ avulso)</option>
+        {(grupos || []).map((g) => <option key={g.id} value={g.id}>{g.nome}</option>)}
+      </select>
+      <span style={{ fontSize: 10.5, color: C.muted, flex: "1 1 220px" }}>
+        {cliente.grupoEconomico
+          ? "O limite e o crédito disponível são do grupo. O bloqueio continua por CNPJ."
+          : (grupos && grupos.length === 0 ? "Nenhum grupo criado ainda — crie na aba Grupos." : "Escolha um grupo para consolidar o crédito com outros CNPJs.")}
+      </span>
+      {error && <span style={{ fontSize: 11, color: C.danger, width: "100%" }}>{error}</span>}
     </div>
   );
 }

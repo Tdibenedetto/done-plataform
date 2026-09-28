@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { CreditCard, Search, Upload, CheckCircle2, XCircle, Building2, History, Bell, BellOff, AlertTriangle, Users } from "lucide-react";
+import { CreditCard, Search, Upload, CheckCircle2, XCircle, Building2, History, Bell, BellOff, AlertTriangle, Users, Layers } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
 import { api, loadSession } from "../lib/api.js";
 import ClientesPanel from "./Clientes.jsx";
+import GruposPanel from "./Grupos.jsx";
 
 const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
@@ -16,7 +17,7 @@ export default function Credito({ goTo }) {
   const [current, setCurrent] = useState(null); // análise ativa sendo trabalhada
   const [uploadingBalanco, setUploadingBalanco] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [view, setView] = useState("consultas"); // "consultas" | "clientes"
+  const [view, setView] = useState("consultas"); // "consultas" | "clientes" | "grupos"
   const [granting, setGranting] = useState(false);
   const [togglingMonitor, setTogglingMonitor] = useState(false);
   const [testingMonitor, setTestingMonitor] = useState(false);
@@ -156,7 +157,13 @@ export default function Credito({ goTo }) {
             style={view === "clientes" ? { ...S.ghostBtn, background: C.ink, color: "#fff", borderColor: C.ink } : S.ghostBtn}
             onClick={() => setView((v) => (v === "clientes" ? "consultas" : "clientes"))}
           >
-            <Users size={14} /> {view === "clientes" ? "Voltar às consultas" : "Clientes"}
+            <Users size={14} /> Clientes
+          </button>
+          <button
+            style={view === "grupos" ? { ...S.ghostBtn, background: C.ink, color: "#fff", borderColor: C.ink } : S.ghostBtn}
+            onClick={() => setView((v) => (v === "grupos" ? "consultas" : "grupos"))}
+          >
+            <Layers size={14} /> Grupos
           </button>
           {view === "consultas" && <button style={S.ghostBtn} onClick={() => setShowHistory((s) => !s)}><History size={14} /> Histórico</button>}
         </div>
@@ -164,6 +171,8 @@ export default function Credito({ goTo }) {
 
       {view === "clientes" ? (
         <ClientesPanel />
+      ) : view === "grupos" ? (
+        <GruposPanel />
       ) : (
         <>
 

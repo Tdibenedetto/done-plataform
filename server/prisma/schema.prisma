@@ -20,6 +20,7 @@ model Organization {
   invites       Invite[]
   leads         Lead[]
   clientes      Cliente[]
+  gruposEconomicos GrupoEconomico[]
   goals         Goal[]
   coachResults  CoachResult[]
   gestaoUploads GestaoUpload[]
@@ -224,6 +225,10 @@ model Cliente {
   // Faturamento anterior ao uso da plataforma (preenchido manualmente, uma vez) — não soma com o
   // faturamento puxado de Vendas, que é automático a partir daqui em diante.
   faturamentoAnteriorPlataforma Float @default(0)
+  // Quando o Cliente pertence a um Grupo Econômico, o limite do GRUPO manda — creditoAprovado
+  // acima fica sem efeito prático. O status (bloqueio) continua sempre por CNPJ.
+  grupoEconomicoId String?
+  grupoEconomico   GrupoEconomico? @relation(fields: [grupoEconomicoId], references: [id], onDelete: SetNull)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -233,6 +238,37 @@ model Cliente {
 
   @@unique([organizationId, cnpj])
   @@index([organizationId])
+  @@index([grupoEconomicoId])
+}
+
+// Vários CNPJs (Clientes) no mesmo grupo — matriz, filiais, franquias. O limite de crédito é
+// consolidado aqui e substitui o limite individual de cada Cliente. O grupo NÃO bloqueia
+// ninguém: bloqueio é por CNPJ, de propósito; o grupo só mostra a exposição total.
+model GrupoEconomico {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  nome           String
+  creditoAprovado Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  clientes        Cliente[]
+  limiteHistorico GrupoLimiteHistorico[]
+
+  @@index([organizationId])
+}
+
+model GrupoLimiteHistorico {
+  id            String         @id @default(uuid())
+  grupoId       String
+  grupo         GrupoEconomico @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  valorAnterior Float?
+  valorNovo     Float
+  alteradoPor   String
+  createdAt     DateTime       @default(now())
+
+  @@index([grupoId])
 }
 
 // Trilha de auditoria de mudanças de limite — nunca sobrescreve, sempre acrescenta uma linha nova.

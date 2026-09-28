@@ -82,6 +82,12 @@ Object.assign(api, {
   clientesCreate: (cnpj, razaoSocial) => request("/clientes", { method: "POST", body: { cnpj, razaoSocial } }),
   clientesSetLimite: (id, novoLimite) => request(`/clientes/${id}/limite`, { method: "PUT", body: { novoLimite } }),
   clientesSetStatus: (id, status, motivo) => request(`/clientes/${id}/status`, { method: "PUT", body: { status, motivo } }),
+  clientesSetGrupo: (id, grupoEconomicoId) => request(`/clientes/${id}/grupo`, { method: "PUT", body: { grupoEconomicoId: grupoEconomicoId || null } }),
+  gruposList: () => request("/grupos"),
+  gruposGet: (id) => request(`/grupos/${id}`),
+  gruposCreate: (nome) => request("/grupos", { method: "POST", body: { nome } }),
+  gruposSetLimite: (id, novoLimite) => request(`/grupos/${id}/limite`, { method: "PUT", body: { novoLimite } }),
+  gruposDelete: (id) => request(`/grupos/${id}`, { method: "DELETE" }),
   clientesSetFaturamentoAnterior: (id, valor) => request(`/clientes/${id}/faturamento-anterior`, { method: "PUT", body: { valor } }),
   creditoBalanco: (id, file) => {
     const form = new FormData();
