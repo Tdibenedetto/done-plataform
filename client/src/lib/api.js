@@ -46,6 +46,18 @@ export const api = {
   gestaoGoals: () => request("/gestao/goals"),
   gestaoGoalSet: (data) => request("/gestao/goals", { method: "PUT", body: data }),
 
+  produtosList: (criterio) => request(`/produtos${criterio ? "?criterio=" + criterio : ""}`),
+  produtosGet: (id) => request(`/produtos/${id}`),
+  produtosCreate: (data) => request("/produtos", { method: "POST", body: data }),
+  produtosUpdate: (id, data) => request(`/produtos/${id}`, { method: "PUT", body: data }),
+  produtosDelete: (id) => request(`/produtos/${id}`, { method: "DELETE" }),
+  produtosSetAbcCriterio: (criterio) => request("/produtos/preferencias/abc-criterio", { method: "PUT", body: { criterio } }),
+  produtosUpload: (file) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request("/produtos/upload", { method: "POST", body: form, isForm: true });
+  },
+
   checkout: (product) => request("/billing/checkout", { method: "POST", body: { product } }),
   billingStatus: () => request("/billing/status"),
 };

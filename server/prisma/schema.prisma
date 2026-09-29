@@ -23,6 +23,7 @@ model Organization {
   leads         Lead[]
   clientes      Cliente[]
   gruposEconomicos GrupoEconomico[]
+  produtos      Produto[]
   goals         Goal[]
   coachResults  CoachResult[]
   gestaoUploads GestaoUpload[]
@@ -48,6 +49,7 @@ model User {
   phone          String?      // E.164, usado nos lembretes automáticos de follow-up
   createdAt      DateTime     @default(now())
   lastLoginAt    DateTime?    // atualizado a cada login — usado para saúde de uso no painel Admin Geral
+  sortimentoAbcCriterio String @default("giro") // "giro" (volume) | "faturamento" — lembrado por usuário, não por organização
 
   assignedLeads Lead[]
   goals         Goal[]
@@ -149,6 +151,55 @@ model Goal {
   month          String // "2026-08"
 
   @@unique([userId, month])
+  @@index([organizationId])
+}
+
+// Gestão de Sortimento. Preço e margem seguem o mesmo padrão da Análise de Crédito: o sistema
+// calcula, mas os campos "*Manual" permitem o usuário sobrescrever quando quiser um valor
+// diferente do calculado a partir de CMV/preço/desconto.
+model Produto {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  produto        String
+  sku            String
+  categoria      String?
+  marca          String?
+  subcategoria   String?
+  status         String   @default("ativo") // "ativo" | "pausado" | "descontinuado"
+  fotoUrl        String?  // link colado pelo usuário — sem upload de arquivo nesta versão
+
+  cmv             Float?
+  precoAtacado    Float?
+  precoPSV        Float?  // Preço Sugerido de Venda (consumidor final)
+  descontoAtacado Float?  // percentual, 0-100
+  descontoPSV     Float?  // percentual, 0-100
+
+  // Sobrescreve o cálculo automático (preço, CMV, desconto) quando preenchido.
+  margemAtacadoManual         Float?
+  margemAtacadoDescontoManual Float?
+  margemPSVManual             Float?
+  margemPSVDescontoManual     Float?
+
+  // Giro em UNIDADES — não vem de Gestão (que só guarda valor em R$, sem unidade); é próprio
+  // do Sortimento, preenchido manualmente ou pela planilha deste módulo.
+  estoqueAtual    Float @default(0)
+  giroMedioMensal Float?
+
+  // Compra/produção futura — soma ao estoque projetado para efeito de cobertura. Sempre que
+  // preenchida, a tela exige um mês de chegada (dia 1 daquele mês, escolhido em dropdown).
+  compraProducao Float?
+  dataChegada    DateTime?
+
+  coberturaIdealDias Int? // editável por produto (não por categoria/marca)
+
+  origemCadastro String @default("manual") // "manual" | "planilha"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, sku])
   @@index([organizationId])
 }
 

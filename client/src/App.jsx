@@ -1,7 +1,7 @@
 import React, { Component, useState, useEffect } from "react";
 import {
   Activity, Trello, BarChart2, LayoutGrid, Eye, EyeOff,
-  ShieldCheck, Menu, X, ChevronRight, CreditCard, LifeBuoy, Wallet, Building2, Tag,
+  ShieldCheck, Menu, X, ChevronRight, CreditCard, LifeBuoy, Wallet, Building2, Tag, Package,
 } from "lucide-react";
 import { C, S, FONT_DISPLAY, FONT_IMPORT, RESPONSIVE_CSS } from "./theme.js";
 import { api, saveSession, loadSession, clearSession } from "./lib/api.js";
@@ -9,6 +9,7 @@ import ComercialCoach from "./modules/ComercialCoach.jsx";
 import FerramentaVendas from "./modules/Vendas.jsx";
 import FerramentaGestao from "./modules/Gestao.jsx";
 import Credito from "./modules/Credito.jsx";
+import Sortimento from "./modules/Sortimento.jsx";
 import VisaoGeral from "./modules/VisaoGeral.jsx";
 import AdminOverview from "./modules/AdminOverview.jsx";
 import Planos from "./modules/Planos.jsx";
@@ -115,6 +116,7 @@ export default function App() {
           {activeModule === "vendas" && <FerramentaVendas goTo={goTo} />}
           {activeModule === "gestao" && <FerramentaGestao goTo={goTo} />}
           {activeModule === "credito" && <Credito goTo={goTo} />}
+          {activeModule === "sortimento" && <Sortimento goTo={goTo} />}
           {activeModule === "planos" && <Planos />}
           {activeModule === "suporte" && <Suporte />}
           {activeModule === "dre" && <Dre goTo={goTo} />}
@@ -374,6 +376,7 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
     { key: "vendas", label: "Ferramenta de Vendas", icon: Trello },
     ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gestão", icon: BarChart2 }] : []),
     { key: "credito", label: "Análise de Crédito", icon: CreditCard },
+    ...(isMaster ? [{ key: "sortimento", label: "Gestão de Sortimento", icon: Package }] : []),
     ...(isMaster ? [{ key: "dre", label: "DRE / Fluxo de Caixa", icon: Wallet }] : []),
     { key: "planos", label: "Planos", icon: Tag },
     ...(isMaster ? [{ key: "suporte", label: "Suporte", icon: LifeBuoy }] : []),

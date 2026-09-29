@@ -347,3 +347,54 @@ Use null para qualquer valor que não conseguir encontrar no documento. Não inv
   }
 }
 
+const PRODUTO_FIELDS = ["produto", "sku", "categoria", "marca", "subcategoria", "cmv", "precoAtacado", "precoPSV", "descontoAtacado", "descontoPSV", "estoqueAtual", "giroMedioMensal", "coberturaIdealDias"];
+
+export async function mapProdutoColumns(headers, sampleRows) {
+  if (!client) return null;
+
+  const prompt = `Você mapeia colunas de planilhas de catálogo de produtos (sortimento) de PMEs para um formato padrão.
+
+Campos padrão que precisamos identificar:
+- produto: nome do produto
+- sku: código/id do produto
+- categoria: categoria do produto
+- marca: marca do produto
+- subcategoria: subcategoria do produto
+- cmv: custo da mercadoria vendida (número)
+- precoAtacado: preço de atacado/revenda (número)
+- precoPSV: preço sugerido de venda ao consumidor final (número)
+- descontoAtacado: percentual de desconto sobre o preço de atacado (número, 0-100)
+- descontoPSV: percentual de desconto sobre o PSV (número, 0-100)
+- estoqueAtual: quantidade em estoque hoje (número, unidades)
+- giroMedioMensal: média de unidades vendidas por mês (número, unidades — não é valor em R$)
+- coberturaIdealDias: quantos dias de estoque a empresa quer manter como meta (número)
+
+Cabeçalhos da planilha enviada: ${JSON.stringify(headers)}
+Três linhas de exemplo: ${JSON.stringify(sampleRows)}
+
+Responda APENAS com um JSON, sem markdown, sem texto antes ou depois, no formato:
+{"produto": "NomeDaColunaOriginal", "sku": "...", "categoria": "...", "marca": "...", "subcategoria": "...", "cmv": "...", "precoAtacado": "...", "precoPSV": "...", "descontoAtacado": "...", "descontoPSV": "...", "estoqueAtual": "...", "giroMedioMensal": "...", "coberturaIdealDias": "..."}
+
+Use null para qualquer campo que não tenha correspondência clara na planilha. Não invente nomes de coluna que não existem na lista de cabeçalhos.`;
+
+  try {
+    const res = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 500,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = res.content.find((b) => b.type === "text")?.text || "";
+    const clean = text.replace(/```json|```/g, "").trim();
+    const mapping = JSON.parse(clean);
+
+    const result = {};
+    for (const field of PRODUTO_FIELDS) {
+      result[field] = mapping[field] && headers.includes(mapping[field]) ? mapping[field] : null;
+    }
+    return result;
+  } catch (e) {
+    console.error("[claude] falha ao mapear colunas de produtos:", e.message);
+    return null;
+  }
+}
+
