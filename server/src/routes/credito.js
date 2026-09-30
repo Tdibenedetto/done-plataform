@@ -20,7 +20,10 @@ function avaliarCredito(f) {
 
   const liquidezCorrente = f.passivoCirculante > 0 ? f.ativoCirculante / f.passivoCirculante : null;
   const endividamento = f.ativoTotal > 0 ? (f.passivoTotal ?? 0) / f.ativoTotal : null;
-  const margemLiquida = f.receita > 0 ? (f.lucroLiquido ?? 0) / f.receita : null;
+  // Lucro líquido ausente do documento (comum quando só o Balanço Patrimonial é enviado, sem
+  // o DRE) fica de fora da conta — null, não 0. Tratar "não sei" como "zero" faria a margem
+  // parecer negativa e reprovar a empresa por falta de dado, não por resultado ruim de verdade.
+  const margemLiquida = (f.receita > 0 && f.lucroLiquido != null) ? f.lucroLiquido / f.receita : null;
 
   const motivos = [];
   if (liquidezCorrente !== null && liquidezCorrente < 1.0) motivos.push(`liquidez corrente baixa (${liquidezCorrente.toFixed(2)})`);
