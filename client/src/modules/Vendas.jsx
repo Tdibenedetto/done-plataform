@@ -880,6 +880,28 @@ function CarteiraPanel({ team, leads, isMaster }) {
   );
 }
 
+// Prévia ao vivo do link de logo — pega exatamente o erro que um link de página (em vez do
+// arquivo da imagem em si) causa, sem precisar abrir a Tabela de Preços Online pra descobrir.
+function LogoPreview({ url }) {
+  const [state, setState] = useState("loading");
+  useEffect(() => {
+    setState("loading");
+    const img = new Image();
+    img.onload = () => setState("ok");
+    img.onerror = () => setState("erro");
+    img.src = url;
+  }, [url]);
+
+  if (state === "loading") return <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>Carregando prévia...</div>;
+  if (state === "erro") return <div style={{ fontSize: 10.5, color: C.danger, marginTop: 2 }}>✗ Não carregou — confira se é o link direto da imagem, não o link de uma página.</div>;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+      <img src={url} alt="" style={{ height: 28, maxWidth: 100, objectFit: "contain", border: `1px solid ${C.border}`, borderRadius: 6, padding: 2 }} />
+      <span style={{ fontSize: 10.5, color: C.sage }}>✓ Carregou</span>
+    </div>
+  );
+}
+
 function TeamPanel({ team, isMaster, onChange }) {
   const me = team.users.find((u) => u.id === loadSession().user.id);
   const [email, setEmail] = useState("");
@@ -1025,11 +1047,14 @@ function TeamPanel({ team, isMaster, onChange }) {
           {testMsg && <div style={{ fontSize: 11, color: C.inkSoft }}>{testMsg}</div>}
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-            <div style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Logo da sua empresa (link)</div>
-            <input style={{ ...S.input, flex: "1 1 220px", fontSize: 11.5 }} placeholder="https://..." value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} />
+            <div style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Logo da sua empresa (link direto da imagem)</div>
+            <input style={{ ...S.input, flex: "1 1 220px", fontSize: 11.5 }} placeholder="https://.../logo.png" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} />
             <button style={S.ghostBtn} disabled={savingLogo} onClick={saveLogo}>{savingLogo ? "Salvando..." : "Salvar"}</button>
           </div>
-          <div style={{ fontSize: 10, color: C.muted }}>Aparece na Tabela de Preços Online (Sortimento) no lugar da marca D.O.N.E.</div>
+          <div style={{ fontSize: 10, color: C.muted }}>
+            Tem que ser o link direto do arquivo da imagem (termina em .png, .jpg…), não o link de uma página que mostra o logo — clique com o botão direito em cima da imagem e escolha "Copiar endereço da imagem". Aparece na Tabela de Preços Online (Sortimento) no lugar da marca D.O.N.E.
+          </div>
+          {logoUrl && <LogoPreview url={logoUrl} />}
           {logoMsg && <div style={{ fontSize: 11, color: C.inkSoft }}>{logoMsg}</div>}
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
