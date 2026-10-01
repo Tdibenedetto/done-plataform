@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Package, Plus, Upload, ArrowLeft, AlertTriangle } from "lucide-react";
+import { Package, Plus, Upload, ArrowLeft, AlertTriangle, Link2, Copy, Check } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
 import { api } from "../lib/api.js";
 
@@ -39,6 +39,7 @@ export default function Sortimento({ goTo }) {
   const [selectedId, setSelectedId] = useState(null);
   const [filter, setFilter] = useState("todos");
   const [showNew, setShowNew] = useState(false);
+  const [showTabelaPublica, setShowTabelaPublica] = useState(false);
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState(null);
@@ -138,12 +139,14 @@ export default function Sortimento({ goTo }) {
             <Upload size={14} /> {uploading ? "Enviando..." : "Enviar planilha"}
             <input type="file" accept=".csv,.xlsx,.xls" style={{ display: "none" }} onChange={handleUpload} disabled={uploading} />
           </label>
+          <button style={{ ...S.ghostBtn, borderColor: C.sage, color: C.sage }} onClick={() => setShowTabelaPublica((s) => !s)}><Link2 size={14} /> Tabela de preços online</button>
           <button style={S.primaryBtnSm} onClick={() => setShowNew((s) => !s)}><Plus size={14} /> Novo produto</button>
         </div>
       </div>
 
       {uploadMsg && <div style={{ fontSize: 12, color: C.sage }}>{uploadMsg}</div>}
       {error && <div style={{ fontSize: 12, color: C.danger }}>{error}</div>}
+      {showTabelaPublica && <TabelaPublicaPanel onClose={() => setShowTabelaPublica(false)} />}
       {showNew && <NovoProdutoForm onCreated={() => { setShowNew(false); reload(payload.criterio); }} onCancel={() => setShowNew(false)} />}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
@@ -221,6 +224,65 @@ function StatCard({ label, value, sub, color }) {
       <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.3, color: C.muted, textTransform: "uppercase" }}>{label}</div>
       <div style={{ fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 700, color: color || C.ink, marginTop: 6 }}>{value}</div>
       {sub && <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function TabelaPublicaPanel({ onClose }) {
+  const [status, setStatus] = useState(undefined); // undefined=carregando, null=sem link, {token,createdAt}=ativo
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  async function load() {
+    try { setStatus(await api.tabelaPublicaStatus()); } catch (e) { setError(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function gerar() {
+    setBusy(true); setError(null); setCopied(false);
+    try { setStatus(await api.tabelaPublicaGerar()); } catch (e) { setError(e.message); } finally { setBusy(false); }
+  }
+  async function revogar() {
+    setBusy(true); setError(null);
+    try { await api.tabelaPublicaRevogar(); setStatus(null); } catch (e) { setError(e.message); } finally { setBusy(false); }
+  }
+  function copyLink() {
+    const url = api.tabelaPublicaUrl(status.token);
+    navigator.clipboard?.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14 }}>Tabela de preços online</div>
+        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 12 }}>Fechar</button>
+      </div>
+      <div style={{ fontSize: 11.5, color: C.muted }}>Mostra só os produtos com status Ativo — sem quantidade de estoque, só disponível/indisponível. Gerar um novo link invalida o anterior na hora.</div>
+
+      {status === null ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 12, color: C.muted }}>Nenhum link ativo ainda.</span>
+          <button style={S.primaryBtnSm} disabled={busy} onClick={gerar}>{busy ? "Gerando..." : "Gerar link"}</button>
+        </div>
+      ) : status ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <input readOnly style={{ ...S.input, flex: "1 1 260px", fontSize: 11.5, color: C.inkSoft }} value={api.tabelaPublicaUrl(status.token)} onFocus={(e) => e.target.select()} />
+            <button style={S.ghostBtn} onClick={copyLink}>{copied ? <><Check size={13} /> Copiado</> : <><Copy size={13} /> Copiar</>}</button>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={S.ghostBtn} disabled={busy} onClick={gerar}>Gerar novo (invalida este)</button>
+            <button style={{ ...S.ghostBtn, borderColor: C.danger, color: C.danger }} disabled={busy} onClick={revogar}>Revogar</button>
+          </div>
+          <div style={{ fontSize: 10, color: C.muted }}>Criado em {fmtDate(status.createdAt)}</div>
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: C.muted }}>Carregando...</div>
+      )}
+      {error && <div style={{ fontSize: 12, color: C.danger }}>{error}</div>}
     </div>
   );
 }

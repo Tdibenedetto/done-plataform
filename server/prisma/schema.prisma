@@ -24,6 +24,8 @@ model Organization {
   clientes      Cliente[]
   gruposEconomicos GrupoEconomico[]
   produtos      Produto[]
+  logoUrl       String?   // link colado pelo usuário — aparece na tabela de preços pública no lugar da marca D.O.N.E
+  tabelaPublica TabelaPrecoPublica?
   goals         Goal[]
   coachResults  CoachResult[]
   gestaoUploads GestaoUpload[]
@@ -201,6 +203,17 @@ model Produto {
 
   @@unique([organizationId, sku])
   @@index([organizationId])
+}
+
+// Link público (sem login) da tabela de preços. Uma organização tem no máximo um token ativo
+// por vez — "gerar novo link" apaga o registro antigo e cria outro, invalidando o anterior na
+// hora (decisão do usuário: quer poder revogar, não um link fixo pra sempre).
+model TabelaPrecoPublica {
+  id             String       @id @default(uuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  token          String       @unique
+  createdAt      DateTime     @default(now())
 }
 
 model GestaoUpload {

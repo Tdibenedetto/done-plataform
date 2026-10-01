@@ -890,6 +890,9 @@ function TeamPanel({ team, isMaster, onChange }) {
   const [savingPhone, setSavingPhone] = useState(false);
   const [days, setDays] = useState(team.followUpDays || 3);
   const [savingDays, setSavingDays] = useState(false);
+  const [logoUrl, setLogoUrl] = useState(team.logoUrl || "");
+  const [savingLogo, setSavingLogo] = useState(false);
+  const [logoMsg, setLogoMsg] = useState(null);
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState(null);
   const [testingWeekly, setTestingWeekly] = useState(false);
@@ -934,6 +937,19 @@ function TeamPanel({ team, isMaster, onChange }) {
       onChange();
     } finally {
       setSavingDays(false);
+    }
+  }
+
+  async function saveLogo() {
+    setSavingLogo(true); setLogoMsg(null);
+    try {
+      await api.teamSetLogo(logoUrl.trim());
+      setLogoMsg("Salvo.");
+      onChange();
+    } catch (e) {
+      setLogoMsg(e.message);
+    } finally {
+      setSavingLogo(false);
     }
   }
 
@@ -1007,6 +1023,14 @@ function TeamPanel({ team, isMaster, onChange }) {
             <span style={{ fontSize: 10.5, color: C.muted }}>dispara a checagem na hora, sem esperar o agendador</span>
           </div>
           {testMsg && <div style={{ fontSize: 11, color: C.inkSoft }}>{testMsg}</div>}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+            <div style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Logo da sua empresa (link)</div>
+            <input style={{ ...S.input, flex: "1 1 220px", fontSize: 11.5 }} placeholder="https://..." value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} />
+            <button style={S.ghostBtn} disabled={savingLogo} onClick={saveLogo}>{savingLogo ? "Salvando..." : "Salvar"}</button>
+          </div>
+          <div style={{ fontSize: 10, color: C.muted }}>Aparece na Tabela de Preços Online (Sortimento) no lugar da marca D.O.N.E.</div>
+          {logoMsg && <div style={{ fontSize: 11, color: C.inkSoft }}>{logoMsg}</div>}
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
             <button style={{ ...S.ghostBtn, fontSize: 11.5 }} disabled={testingWeekly} onClick={runWeeklyTest}>{testingWeekly ? "Enviando..." : "Testar relatório semanal"}</button>

@@ -15,6 +15,7 @@ import creditoRoutes from "./routes/credito.js";
 import clientesRoutes from "./routes/clientes.js";
 import gruposRoutes from "./routes/grupos.js";
 import produtosRoutes from "./routes/produtos.js";
+import tabelaPublicaViewRoutes from "./routes/tabelaPublicaView.js";
 import chatRoutes from "./routes/chat.js";
 import dreRoutes from "./routes/dre.js";
 import adminRoutes from "./routes/admin.js";
@@ -119,6 +120,7 @@ app.use("/api/credito", requireAuth, creditoRoutes);
 app.use("/api/clientes", requireAuth, clientesRoutes);
 app.use("/api/grupos", requireAuth, gruposRoutes);
 app.use("/api/produtos", requireAuth, produtosRoutes);
+app.use(tabelaPublicaViewRoutes); // pública, sem requireAuth — é a tabela que o cliente final acessa
 app.use("/api/chat", requireAuth, chatRoutes);
 app.use("/api/dre", requireAuth, dreRoutes);
 app.use("/api/admin", requireAuth, requirePlatformAdmin, adminRoutes);

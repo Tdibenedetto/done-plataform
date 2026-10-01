@@ -1,4 +1,5 @@
 import { Router } from "express";
+import crypto from "crypto";
 import multer from "multer";
 import { prisma } from "../lib/prisma.js";
 import { requirePlan } from "../middleware/auth.js";
@@ -214,6 +215,29 @@ router.post("/upload", upload.single("file"), async (req, res) => {
   }
 
   res.json({ created, updated, skipped, mappingUsed: mapping });
+});
+
+// -------- Tabela de preços pública: status do link atual --------
+router.get("/tabela-publica", async (req, res) => {
+  const existing = await prisma.tabelaPrecoPublica.findUnique({ where: { organizationId: req.organizationId } });
+  res.json(existing ? { token: existing.token, createdAt: existing.createdAt } : null);
+});
+
+// Gerar sempre REVOGA o link anterior — é a decisão do usuário (não um link fixo pra sempre).
+// Apaga e recria numa transação pra nunca deixar a organização com dois tokens nem com zero
+// por um instante em caso de erro no meio do caminho.
+router.post("/tabela-publica/gerar", async (req, res) => {
+  const token = crypto.randomBytes(16).toString("hex");
+  await prisma.$transaction([
+    prisma.tabelaPrecoPublica.deleteMany({ where: { organizationId: req.organizationId } }),
+    prisma.tabelaPrecoPublica.create({ data: { organizationId: req.organizationId, token } }),
+  ]);
+  res.json({ token });
+});
+
+router.delete("/tabela-publica", async (req, res) => {
+  await prisma.tabelaPrecoPublica.deleteMany({ where: { organizationId: req.organizationId } });
+  res.json({ ok: true });
 });
 
 export default router;
