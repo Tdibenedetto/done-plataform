@@ -68,26 +68,6 @@ function computeCurvaABC(produtos, criterio) {
   return curvas;
 }
 
-// -------- Listagem, com curva ABC no critério salvo do usuário (ou o informado via query) --------
-router.get("/", async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { sortimentoAbcCriterio: true } });
-  const criterio = req.query.criterio === "faturamento" || req.query.criterio === "giro" ? req.query.criterio : user?.sortimentoAbcCriterio || "giro";
-
-  const produtos = await prisma.produto.findMany({ where: { organizationId: req.organizationId }, orderBy: { produto: "asc" } });
-  const curvas = computeCurvaABC(produtos, criterio);
-
-  res.json({
-    criterio,
-    produtos: produtos.map((p) => ({ ...serializeProduto(p), curva: curvas[p.id] })),
-  });
-});
-
-router.get("/:id", async (req, res) => {
-  const produto = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
-  if (!produto) return res.status(404).json({ error: "Produto não encontrado." });
-  res.json(serializeProduto(produto));
-});
-
 function validateBody(body, { partial = false } = {}) {
   const data = {};
   if (body.produto !== undefined) data.produto = String(body.produto).trim();
@@ -121,6 +101,30 @@ function validateBody(body, { partial = false } = {}) {
   return { data };
 }
 
+// =====================================================================================
+// IMPORTANTE: todas as rotas de CAMINHO FIXO (/tabela-publica, /preferencias/..., /upload)
+// precisam vir ANTES das rotas genéricas /:id abaixo. O Express casa rotas na ordem em que
+// são registradas — "/:id" aceita QUALQUER segmento único, incluindo a palavra literal
+// "tabela-publica". Bug real que já aconteceu aqui: GET /tabela-publica estava sendo
+// respondido pela rota GET /:id (tratando "tabela-publica" como se fosse um id de produto),
+// nunca chegando na rota certa — o pedido "funcionava" (200 ou 404), só que errado, e o
+// frontend ficava preso em "Carregando..." porque não reconhecia aquele formato de resposta.
+// =====================================================================================
+
+// -------- Listagem, com curva ABC no critério salvo do usuário (ou o informado via query) --------
+router.get("/", async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { sortimentoAbcCriterio: true } });
+  const criterio = req.query.criterio === "faturamento" || req.query.criterio === "giro" ? req.query.criterio : user?.sortimentoAbcCriterio || "giro";
+
+  const produtos = await prisma.produto.findMany({ where: { organizationId: req.organizationId }, orderBy: { produto: "asc" } });
+  const curvas = computeCurvaABC(produtos, criterio);
+
+  res.json({
+    criterio,
+    produtos: produtos.map((p) => ({ ...serializeProduto(p), curva: curvas[p.id] })),
+  });
+});
+
 router.post("/", async (req, res) => {
   const { data, error } = validateBody(req.body);
   if (error) return res.status(400).json({ error });
@@ -130,24 +134,6 @@ router.post("/", async (req, res) => {
 
   const produto = await prisma.produto.create({ data: { ...data, organizationId: req.organizationId, origemCadastro: "manual" } });
   res.status(201).json(serializeProduto(produto));
-});
-
-router.put("/:id", async (req, res) => {
-  const existing = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
-  if (!existing) return res.status(404).json({ error: "Produto não encontrado." });
-
-  const { data, error } = validateBody(req.body, { partial: true });
-  if (error) return res.status(400).json({ error });
-
-  const produto = await prisma.produto.update({ where: { id: existing.id }, data });
-  res.json(serializeProduto(produto));
-});
-
-router.delete("/:id", async (req, res) => {
-  const existing = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
-  if (!existing) return res.status(404).json({ error: "Produto não encontrado." });
-  await prisma.produto.delete({ where: { id: existing.id } });
-  res.json({ ok: true });
 });
 
 // -------- Preferência de visualização da curva ABC (por usuário, não por organização) --------
@@ -237,6 +223,31 @@ router.post("/tabela-publica/gerar", async (req, res) => {
 
 router.delete("/tabela-publica", async (req, res) => {
   await prisma.tabelaPrecoPublica.deleteMany({ where: { organizationId: req.organizationId } });
+  res.json({ ok: true });
+});
+
+// -------- A partir daqui, só rotas genéricas por :id --------
+router.get("/:id", async (req, res) => {
+  const produto = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
+  if (!produto) return res.status(404).json({ error: "Produto não encontrado." });
+  res.json(serializeProduto(produto));
+});
+
+router.put("/:id", async (req, res) => {
+  const existing = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
+  if (!existing) return res.status(404).json({ error: "Produto não encontrado." });
+
+  const { data, error } = validateBody(req.body, { partial: true });
+  if (error) return res.status(400).json({ error });
+
+  const produto = await prisma.produto.update({ where: { id: existing.id }, data });
+  res.json(serializeProduto(produto));
+});
+
+router.delete("/:id", async (req, res) => {
+  const existing = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
+  if (!existing) return res.status(404).json({ error: "Produto não encontrado." });
+  await prisma.produto.delete({ where: { id: existing.id } });
   res.json({ ok: true });
 });
 
