@@ -13,6 +13,16 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 router.use(requirePlan(["vendas", "gestao", "completo"]));
 
 const STATUS_VALUES = ["ativo", "pausado", "descontinuado"];
+const EMBALAGEM_VALUES = ["Adesivo", "Blister", "Brownbox", "Cinta", "Giftbox", "Tag"];
+
+// Vira "metalurgica-bravo-ltda" — usado só para deixar a URL da tabela pública legível.
+function slugify(str) {
+  return String(str || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "empresa";
+}
 const CANONICAL_HEADERS = ["produto", "sku", "categoria", "marca", "subcategoria", "cmv", "precoAtacado", "precoPSV", "descontoAtacado", "descontoPSV", "estoqueAtual", "giroMedioMensal", "coberturaIdealDias"];
 
 // -------- Cálculo de margem e cobertura — mesma lógica testada isoladamente antes de integrar --------
@@ -48,6 +58,8 @@ function serializeProduto(p) {
     compraProducao: p.compraProducao, dataChegada: p.dataChegada,
     coberturaIdealDias: p.coberturaIdealDias, coberturaAtualDias, coberturaProjetadaDias,
     abaixoCobertura, terminoDeEstoque, origemCadastro: p.origemCadastro, createdAt: p.createdAt,
+    altura: p.altura, largura: p.largura, comprimento: p.comprimento, pesoGross: p.pesoGross, pesoNet: p.pesoNet,
+    caixaMaster: p.caixaMaster, tipoEmbalagem: p.tipoEmbalagem, ncm: p.ncm,
   };
 }
 
@@ -90,6 +102,18 @@ function validateBody(body, { partial = false } = {}) {
     if (body[f] !== undefined) data[f] = body[f] === null || body[f] === "" ? null : Number(body[f]);
   }
   if (body.coberturaIdealDias !== undefined) data.coberturaIdealDias = body.coberturaIdealDias === null || body.coberturaIdealDias === "" ? null : Math.round(Number(body.coberturaIdealDias));
+
+  for (const f of ["altura", "largura", "comprimento", "pesoGross", "pesoNet"]) {
+    if (body[f] !== undefined) data[f] = body[f] === null || body[f] === "" ? null : Number(body[f]);
+  }
+  if (body.caixaMaster !== undefined) data.caixaMaster = body.caixaMaster === null || body.caixaMaster === "" ? null : Math.round(Number(body.caixaMaster));
+  if (body.tipoEmbalagem !== undefined) {
+    if (body.tipoEmbalagem && !EMBALAGEM_VALUES.includes(body.tipoEmbalagem)) {
+      return { error: `Tipo de embalagem inválido. Use um de: ${EMBALAGEM_VALUES.join(", ")}.` };
+    }
+    data.tipoEmbalagem = body.tipoEmbalagem || null;
+  }
+  if (body.ncm !== undefined) data.ncm = body.ncm ? String(body.ncm).trim() : null;
 
   // Compra/produção sempre exige mês de chegada — sem isso a cobertura projetada não sabe quando contar.
   if (body.compraProducao !== undefined && data.compraProducao != null) {
@@ -206,19 +230,23 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 // -------- Tabela de preços pública: status do link atual --------
 router.get("/tabela-publica", async (req, res) => {
   const existing = await prisma.tabelaPrecoPublica.findUnique({ where: { organizationId: req.organizationId } });
-  res.json(existing ? { token: existing.token, createdAt: existing.createdAt } : null);
+  res.json(existing ? { token: existing.token, slug: existing.slug, createdAt: existing.createdAt } : null);
 });
 
 // Gerar sempre REVOGA o link anterior — é a decisão do usuário (não um link fixo pra sempre).
 // Apaga e recria numa transação pra nunca deixar a organização com dois tokens nem com zero
 // por um instante em caso de erro no meio do caminho.
 router.post("/tabela-publica/gerar", async (req, res) => {
-  const token = crypto.randomBytes(16).toString("hex");
+  const org = await prisma.organization.findUnique({ where: { id: req.organizationId }, select: { name: true } });
+  const slug = slugify(org?.name);
+  // 4 bytes (8 caracteres hex) é de sobra pra não adivinharem por tentativa — a URL fica curta
+  // de propósito, já que agora tem o nome da empresa junto (link mais legível pra compartilhar).
+  const token = crypto.randomBytes(4).toString("hex");
   await prisma.$transaction([
     prisma.tabelaPrecoPublica.deleteMany({ where: { organizationId: req.organizationId } }),
-    prisma.tabelaPrecoPublica.create({ data: { organizationId: req.organizationId, token } }),
+    prisma.tabelaPrecoPublica.create({ data: { organizationId: req.organizationId, token, slug } }),
   ]);
-  res.json({ token });
+  res.json({ token, slug });
 });
 
 router.delete("/tabela-publica", async (req, res) => {

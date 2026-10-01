@@ -8,6 +8,7 @@ const fmtPct = (n) => (n == null ? "—" : n.toLocaleString("pt-BR", { maximumFr
 const fmtDate = (d) => new Date(d).toLocaleDateString("pt-BR");
 
 const STATUS_LABEL = { ativo: "Ativo", pausado: "Pausado", descontinuado: "Descontinuado" };
+const EMBALAGEM_OPTIONS = ["Adesivo", "Blister", "Brownbox", "Cinta", "Giftbox", "Tag"];
 const STATUS_BG = { ativo: C.sageSoft, pausado: C.goldSoft, descontinuado: "#EDEDEF" };
 const STATUS_COLOR = { ativo: C.sage, pausado: "#8A6423", descontinuado: C.muted };
 const ABC_BG = { A: C.sageSoft, B: C.goldSoft, C: "#EDEDEF" };
@@ -38,6 +39,7 @@ export default function Sortimento({ goTo }) {
   const [payload, setPayload] = useState(null); // { criterio, produtos }
   const [selectedId, setSelectedId] = useState(null);
   const [filter, setFilter] = useState("todos");
+  const [search, setSearch] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [showTabelaPublica, setShowTabelaPublica] = useState(false);
   const [error, setError] = useState(null);
@@ -108,7 +110,9 @@ export default function Sortimento({ goTo }) {
   }
   const ativos = produtos.filter((p) => p.status === "ativo").length;
 
+  const termo = search.trim().toLowerCase();
   const filtered = produtos.filter((p) => {
+    if (termo && !(p.produto.toLowerCase().includes(termo) || p.sku.toLowerCase().includes(termo))) return false;
     if (filter === "A" || filter === "B" || filter === "C") return p.curva === filter;
     if (filter === "abaixo") return p.abaixoCobertura;
     if (filter === "termino") return p.terminoDeEstoque;
@@ -158,6 +162,13 @@ export default function Sortimento({ goTo }) {
         <StatCard label="Término de Estoque" value={terminoCount} color="#8A6423" sub="descontinuados, sem recompra" />
       </div>
 
+      <input
+        style={{ ...S.input, maxWidth: 320 }}
+        placeholder="Buscar por nome ou código..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {[["todos", `Todos (${produtos.length})`], ["A", `Curva A (${curvaCount.A})`], ["B", `Curva B (${curvaCount.B})`], ["C", `Curva C (${curvaCount.C})`], ["abaixo", `⚠ Abaixo da cobertura (${abaixoCount})`], ["termino", `Término de estoque (${terminoCount})`]].map(([key, label]) => (
           <div key={key} onClick={() => setFilter(key)} style={{ fontSize: 11.5, fontWeight: 600, padding: "7px 13px", borderRadius: 99, border: `1px solid ${filter === key ? C.ink : C.border}`, background: filter === key ? C.ink : C.card, color: filter === key ? "#fff" : C.ink, cursor: "pointer" }}>
@@ -174,10 +185,10 @@ export default function Sortimento({ goTo }) {
       ) : (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1180 }}>
             <thead>
               <tr>
-                {["Produto", "Categoria", "Curva", "Giro médio/mês", "Estoque atual", "Cobertura (atual → ideal)", "Status"].map((h) => (
+                {["Produto", "Categoria", "Curva", "Giro médio/mês", "Preço Atacado", "Preço Varejo", "Margem Atacado", "Margem Varejo", "Estoque atual", "Cobertura (atual → ideal)", "Status"].map((h) => (
                   <th key={h} style={{ textAlign: "left", fontSize: 9.5, fontWeight: 700, letterSpacing: 0.3, color: C.muted, textTransform: "uppercase", padding: "11px 14px", background: C.paper, borderBottom: `1px solid ${C.border}` }}>{h}</th>
                 ))}
               </tr>
@@ -197,7 +208,19 @@ export default function Sortimento({ goTo }) {
                     </td>
                     <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 12.5 }}>{p.categoria || "—"}</td>
                     <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}` }}><AbcBadge curva={p.curva} /></td>
-                    <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 12.5 }}>{p.giroMedioMensal != null ? `${p.giroMedioMensal} un` : "—"}</td>
+                    <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 12.5 }}>{p.giroMedioMensal != null ? `${p.giroMedioMensal.toFixed(1)} un` : "—"}</td>
+                    <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}` }}>
+                      <ComboCell original={p.precoAtacado} comDesconto={p.precoAtacado != null ? p.precoAtacado * (1 - (p.descontoAtacado || 0) / 100) : null} format={fmtBRL} />
+                    </td>
+                    <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}` }}>
+                      <ComboCell original={p.precoPSV} comDesconto={p.precoPSV != null ? p.precoPSV * (1 - (p.descontoPSV || 0) / 100) : null} format={fmtBRL} />
+                    </td>
+                    <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}` }}>
+                      <ComboCell original={p.margemAtacado} comDesconto={p.margemAtacadoDesconto} format={fmtPct} />
+                    </td>
+                    <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}` }}>
+                      <ComboCell original={p.margemPSV} comDesconto={p.margemPSVDesconto} format={fmtPct} />
+                    </td>
                     <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 12.5 }}>{p.estoqueAtual} un</td>
                     <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}` }}>
                       {p.coberturaIdealDias ? (
@@ -217,6 +240,19 @@ export default function Sortimento({ goTo }) {
         </div>
       )}
     </div>
+  );
+}
+
+// Mostra "valor regular → valor com desconto" quando há desconto, ou só o valor regular.
+function ComboCell({ original, comDesconto, format }) {
+  if (original == null) return <span style={{ fontSize: 11, color: C.muted }}>—</span>;
+  const diferente = comDesconto != null && Math.abs(comDesconto - original) > 0.001;
+  if (!diferente) return <span style={{ fontSize: 12 }}>{format(original)}</span>;
+  return (
+    <span style={{ fontSize: 11 }}>
+      <span style={{ textDecoration: "line-through", color: C.muted, marginRight: 4 }}>{format(original)}</span>
+      <span style={{ color: C.danger, fontWeight: 700 }}>{format(comDesconto)}</span>
+    </span>
   );
 }
 
@@ -250,7 +286,7 @@ function TabelaPublicaPanel({ onClose }) {
     try { await api.tabelaPublicaRevogar(); setStatus(null); } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
   function copyLink() {
-    const url = api.tabelaPublicaUrl(status.token);
+    const url = api.tabelaPublicaUrl(status.slug, status.token);
     navigator.clipboard?.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -272,7 +308,7 @@ function TabelaPublicaPanel({ onClose }) {
       ) : status ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <input readOnly style={{ ...S.input, flex: "1 1 260px", fontSize: 11.5, color: C.inkSoft }} value={api.tabelaPublicaUrl(status.token)} onFocus={(e) => e.target.select()} />
+            <input readOnly style={{ ...S.input, flex: "1 1 260px", fontSize: 11.5, color: C.inkSoft }} value={api.tabelaPublicaUrl(status.slug, status.token)} onFocus={(e) => e.target.select()} />
             <button style={S.ghostBtn} onClick={copyLink}>{copied ? <><Check size={13} /> Copiado</> : <><Copy size={13} /> Copiar</>}</button>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -358,7 +394,7 @@ function ProdutoDetail({ produto, onBack, onChanged }) {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-        <StatCard label="Giro Médio/Mês" value={produto.giroMedioMensal != null ? `${produto.giroMedioMensal} un` : "—"} />
+        <StatCard label="Giro Médio/Mês" value={produto.giroMedioMensal != null ? `${produto.giroMedioMensal.toFixed(1)} un` : "—"} />
         <StatCard label="Estoque Atual" value={`${produto.estoqueAtual} un`} color={produto.abaixoCobertura ? C.danger : undefined} sub={produto.coberturaAtualDias != null ? `${produto.coberturaAtualDias} dias de cobertura` : undefined} />
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 15px" }}>
           <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.3, color: C.muted, textTransform: "uppercase" }}>Cobertura Ideal (dias)</div>
@@ -396,6 +432,35 @@ function ProdutoDetail({ produto, onBack, onChanged }) {
 
         <PriceMarginPanel produto={produto} form={form} setForm={setForm} save={save} />
       </div>
+
+      <DimensoesPanel form={form} setForm={setForm} save={save} />
+    </div>
+  );
+}
+
+function DimensoesPanel({ form, setForm, save }) {
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 14.5, marginBottom: 12 }}>Dimensões e Embalagem</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div>
+          <FieldRow label="Altura (cm)"><input style={S.input} type="number" value={form.altura ?? ""} onChange={(e) => setForm({ ...form, altura: e.target.value })} onBlur={() => save({ altura: form.altura || null })} /></FieldRow>
+          <FieldRow label="Largura (cm)"><input style={S.input} type="number" value={form.largura ?? ""} onChange={(e) => setForm({ ...form, largura: e.target.value })} onBlur={() => save({ largura: form.largura || null })} /></FieldRow>
+          <FieldRow label="Comprimento (cm)"><input style={S.input} type="number" value={form.comprimento ?? ""} onChange={(e) => setForm({ ...form, comprimento: e.target.value })} onBlur={() => save({ comprimento: form.comprimento || null })} /></FieldRow>
+          <FieldRow label="Peso Gross (kg)"><input style={S.input} type="number" value={form.pesoGross ?? ""} onChange={(e) => setForm({ ...form, pesoGross: e.target.value })} onBlur={() => save({ pesoGross: form.pesoGross || null })} /></FieldRow>
+          <FieldRow label="Peso Net (kg)"><input style={S.input} type="number" value={form.pesoNet ?? ""} onChange={(e) => setForm({ ...form, pesoNet: e.target.value })} onBlur={() => save({ pesoNet: form.pesoNet || null })} /></FieldRow>
+        </div>
+        <div>
+          <FieldRow label="Caixa Master (un)"><input style={S.input} type="number" value={form.caixaMaster ?? ""} onChange={(e) => setForm({ ...form, caixaMaster: e.target.value })} onBlur={() => save({ caixaMaster: form.caixaMaster || null })} /></FieldRow>
+          <FieldRow label="Tipo de embalagem">
+            <select style={S.input} value={form.tipoEmbalagem || ""} onChange={(e) => { setForm({ ...form, tipoEmbalagem: e.target.value }); save({ tipoEmbalagem: e.target.value || null }); }}>
+              <option value="">Selecione...</option>
+              {EMBALAGEM_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </FieldRow>
+          <FieldRow label="NCM"><input style={S.input} placeholder="0000.00.00" value={form.ncm || ""} onChange={(e) => setForm({ ...form, ncm: e.target.value })} onBlur={() => save({ ncm: form.ncm || null })} /></FieldRow>
+        </div>
+      </div>
     </div>
   );
 }
@@ -427,10 +492,10 @@ function PriceMarginPanel({ produto, form, setForm, save }) {
           <FieldRow label="Margem c/ desconto"><input style={{ ...S.input, color: marginColor(produto.margemAtacadoDesconto), fontWeight: 700 }} placeholder={fmtPct(produto.margemAtacadoDesconto)} value={form.margemAtacadoDescontoManual ?? ""} onChange={(e) => setForm({ ...form, margemAtacadoDescontoManual: e.target.value })} onBlur={() => save({ margemAtacadoDescontoManual: form.margemAtacadoDescontoManual || null })} /></FieldRow>
         </div>
         <div>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: "uppercase", marginBottom: 6 }}>PSV (Preço Sugerido de Venda)</div>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: "uppercase", marginBottom: 6 }}>Varejo</div>
           <FieldRow label="CMV"><span style={{ fontSize: 12, color: C.muted }}>{fmtBRL(produto.cmv)} (igual ao Atacado)</span></FieldRow>
-          <FieldRow label="PSV"><input style={S.input} type="number" value={form.precoPSV ?? ""} onChange={(e) => setForm({ ...form, precoPSV: e.target.value })} onBlur={() => save({ precoPSV: form.precoPSV || null })} /></FieldRow>
-          <FieldRow label="Desconto PSV (%)"><input style={S.input} type="number" value={form.descontoPSV ?? ""} onChange={(e) => setForm({ ...form, descontoPSV: e.target.value })} onBlur={() => save({ descontoPSV: form.descontoPSV || null })} /></FieldRow>
+          <FieldRow label="Preço Varejo"><input style={S.input} type="number" value={form.precoPSV ?? ""} onChange={(e) => setForm({ ...form, precoPSV: e.target.value })} onBlur={() => save({ precoPSV: form.precoPSV || null })} /></FieldRow>
+          <FieldRow label="Desconto Varejo (%)"><input style={S.input} type="number" value={form.descontoPSV ?? ""} onChange={(e) => setForm({ ...form, descontoPSV: e.target.value })} onBlur={() => save({ descontoPSV: form.descontoPSV || null })} /></FieldRow>
           <FieldRow label="Margem regular"><input style={{ ...S.input, color: marginColor(produto.margemPSV), fontWeight: 700 }} placeholder={fmtPct(produto.margemPSV)} value={form.margemPSVManual ?? ""} onChange={(e) => setForm({ ...form, margemPSVManual: e.target.value })} onBlur={() => save({ margemPSVManual: form.margemPSVManual || null })} /></FieldRow>
           <FieldRow label="Margem c/ desconto"><input style={{ ...S.input, color: marginColor(produto.margemPSVDesconto), fontWeight: 700 }} placeholder={fmtPct(produto.margemPSVDesconto)} value={form.margemPSVDescontoManual ?? ""} onChange={(e) => setForm({ ...form, margemPSVDescontoManual: e.target.value })} onBlur={() => save({ margemPSVDescontoManual: form.margemPSVDescontoManual || null })} /></FieldRow>
         </div>

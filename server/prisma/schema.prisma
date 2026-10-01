@@ -196,6 +196,16 @@ model Produto {
 
   coberturaIdealDias Int? // editável por produto (não por categoria/marca)
 
+  // Dimensões e embalagem — cm e kg, livre (não validamos unidade, é o padrão que a empresa usa)
+  altura       Float?
+  largura      Float?
+  comprimento  Float?
+  pesoGross    Float?
+  pesoNet      Float?
+  caixaMaster  Int?    // unidades por caixa master
+  tipoEmbalagem String? // Adesivo | Blister | Brownbox | Cinta | Giftbox | Tag
+  ncm          String?
+
   origemCadastro String @default("manual") // "manual" | "planilha"
 
   createdAt DateTime @default(now())
@@ -212,6 +222,10 @@ model TabelaPrecoPublica {
   id             String       @id @default(uuid())
   organizationId String       @unique
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // O link fica /tabela/:slug/:token — slug é só estético (nome da empresa, pode ficar
+  // desatualizado se a empresa for renomeada depois, sem problema) e token é o que realmente
+  // identifica e autoriza o acesso (único, curto o bastante pra URL ficar legível).
+  slug           String?
   token          String       @unique
   createdAt      DateTime     @default(now())
 }

@@ -121,7 +121,9 @@ Object.assign(api, {
   tabelaPublicaStatus: () => request("/produtos/tabela-publica"),
   tabelaPublicaGerar: () => request("/produtos/tabela-publica/gerar", { method: "POST" }),
   tabelaPublicaRevogar: () => request("/produtos/tabela-publica", { method: "DELETE" }),
-  tabelaPublicaUrl: (token) => API_URL.replace(/\/api\/?$/, "") + "/tabela/" + token,
+  // precos.donestrategy.com aponta pro mesmo done-api (domínio dedicado só pra deixar o link
+  // bonito) — continua funcionando pelo endereço antigo também, essa é só a forma preferida.
+  tabelaPublicaUrl: (slug, token) => `https://precos.donestrategy.com/tabela/${encodeURIComponent(slug || "empresa")}/${token}`,
   teamFollowupTest: () => request("/team/followup-test", { method: "POST" }),
   teamGrantTestAccess: (modules) => request("/team/grant-test-access", { method: "POST", body: { modules } }),
   teamWeeklyReportTest: () => request("/team/weekly-report-test", { method: "POST" }),
