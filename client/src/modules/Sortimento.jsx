@@ -149,7 +149,7 @@ export default function Sortimento({ goTo }) {
       {showTabelaPublica && <TabelaPublicaPanel onClose={() => setShowTabelaPublica(false)} />}
       {showNew && <NovoProdutoForm onCreated={() => { setShowNew(false); reload(payload.criterio); }} onCancel={() => setShowNew(false)} />}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
+      <div className="done-metrics-grid" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
         <StatCard label="SKUs Ativos" value={ativos} sub={`de ${produtos.length} cadastrados`} />
         <StatCard label="Curva A" value={curvaCount.A} color={C.sage} sub="80% do critério" />
         <StatCard label="Curva B" value={curvaCount.B} color={C.gold} sub="15% do critério" />
@@ -173,7 +173,8 @@ export default function Sortimento({ goTo }) {
         </div>
       ) : (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
             <thead>
               <tr>
                 {["Produto", "Categoria", "Curva", "Giro médio/mês", "Estoque atual", "Cobertura (atual → ideal)", "Status"].map((h) => (
@@ -212,6 +213,7 @@ export default function Sortimento({ goTo }) {
               })}
             </tbody>
           </table>
+        </div>
         </div>
       )}
     </div>
