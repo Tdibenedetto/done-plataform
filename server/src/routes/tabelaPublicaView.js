@@ -1,10 +1,11 @@
 import { Router } from "express";
-import * as XLSX from "xlsx";
+import PDFDocument from "pdfkit";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 async function loadTabela(token) {
   const link = await prisma.tabelaPrecoPublica.findUnique({ where: { token }, include: { organization: { select: { name: true, logoUrl: true } } } });
@@ -103,7 +104,7 @@ router.get("/tabela/:slug/:token", async (req, res) => {
   <div class="top">${brandHtml}<div class="date">Atualizado em ${hoje}</div></div>
   <div class="title">Tabela de Preços</div>
   <div class="subtitle">Consulte os preços vigentes. Para pedidos, fale com seu representante comercial.</div>
-  <a class="btn-download" href="/tabela/${encodeURIComponent(req.params.slug)}/${req.params.token}/download">⬇ Baixar tabela (Excel)</a>
+  <a class="btn-download" href="/tabela/${encodeURIComponent(req.params.slug)}/${req.params.token}/download">⬇ Baixar tabela (PDF)</a>
   ${produtos.length === 0 ? `<div class="empty">Nenhum produto disponível no momento.</div>` : `
   <div class="controls">
     <input id="busca" type="text" placeholder="Buscar por nome ou código...">
@@ -166,40 +167,137 @@ router.get("/tabela/:slug/:token", async (req, res) => {
 </body></html>`);
 });
 
-// -------- Download em Excel --------
+// Busca o logo como buffer pra embutir no PDF — pdfkit não aceita URL direto, só PNG/JPEG.
+// Se o link falhar ou for um formato que o pdfkit não lê (SVG, WebP...), cai pro título em
+// texto puro — igual ao comportamento da página HTML quando o logo não carrega.
+async function fetchImageBuffer(url) {
+  if (!url) return null;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    return Buffer.from(await r.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+const PDF_COLS = [
+  { key: "sku", label: "Código", width: 50 },
+  { key: "produto", label: "Descrição", width: 130 },
+  { key: "atacado", label: "Atacado", width: 68 },
+  { key: "varejo", label: "Varejo", width: 68 },
+  { key: "desconto", label: "Desconto", width: 60 },
+  { key: "estoque", label: "Estoque", width: 64 },
+  { key: "compras", label: "Compras", width: 75 },
+];
+const PDF_MARGIN = 40;
+const PDF_INK = "#1C2130", PDF_GOLD = "#B8863A", PDF_MUTED = "#8A8F9C", PDF_BORDER = "#E5E2D9";
+
+function pdfTableHeader(doc, x) {
+  const rowH = 20;
+  const rowY = doc.y; // fixo ANTES do laço — doc.text() com x/y explícitos ainda mexe em doc.y
+  // internamente a cada chamada, então sem isso cada coluna empurrava a próxima pra baixo.
+  doc.rect(x, rowY, PDF_COLS.reduce((s, c) => s + c.width, 0), rowH).fill("#FAF9F5");
+  doc.fillColor(PDF_MUTED).fontSize(8).font("Helvetica-Bold");
+  let cx = x;
+  for (const col of PDF_COLS) {
+    doc.text(col.label.toUpperCase(), cx + 4, rowY + 6, { width: col.width - 8, lineBreak: false });
+    cx += col.width;
+  }
+  doc.y = rowY + rowH; // avança manualmente, não confia no que text() deixou
+  doc.font("Helvetica").fillColor(PDF_INK);
+}
+
+// -------- Download em PDF --------
 router.get("/tabela/:slug/:token/download", async (req, res) => {
   const data = await loadTabela(req.params.token);
   if (!data) return res.status(404).send("Link inválido.");
+  const { organization, produtos } = data;
 
-  const rows = data.produtos.map((p) => {
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="tabela-de-precos.pdf"`);
+
+  const doc = new PDFDocument({ size: "A4", margin: PDF_MARGIN, bufferPages: true });
+  doc.pipe(res);
+
+  const logoBuf = await fetchImageBuffer(organization.logoUrl);
+  const tituloX = PDF_MARGIN;
+  let tituloY = PDF_MARGIN;
+  if (logoBuf) {
+    try {
+      doc.image(logoBuf, PDF_MARGIN, PDF_MARGIN, { fit: [90, 36] });
+      tituloY = PDF_MARGIN + 44;
+    } catch {
+      // formato que o pdfkit não lê (ex: SVG/WebP) — segue só com o título, sem derrubar o PDF
+    }
+  }
+  doc.font("Helvetica-Bold").fontSize(16).fillColor(PDF_INK)
+    .text(`Tabela de Preços — ${organization.name}`, tituloX, tituloY, { width: 515 });
+  doc.moveDown(1.4);
+
+  const tableX = PDF_MARGIN;
+  const tableWidth = PDF_COLS.reduce((s, c) => s + c.width, 0);
+  const bottomLimit = doc.page.height - PDF_MARGIN - 20; // espaço reservado pro rodapé
+
+  pdfTableHeader(doc, tableX);
+
+  for (const p of produtos) {
     const atacado = precoComDesconto(p.precoAtacado, p.descontoAtacado);
     const varejo = precoComDesconto(p.precoPSV, p.descontoPSV);
     const temCompra = p.compraProducao != null && p.compraProducao > 0;
-    const mesChegada = temCompra && p.dataChegada ? `${MESES[new Date(p.dataChegada).getUTCMonth()]}/${new Date(p.dataChegada).getUTCFullYear()}` : "";
+    const mesChegada = temCompra && p.dataChegada ? `${MESES_ABREV[new Date(p.dataChegada).getUTCMonth()]}/${new Date(p.dataChegada).getUTCFullYear()}` : "";
     const descontoTxt = [
-      p.descontoAtacado ? `Atacado ${p.descontoAtacado}%` : null,
-      p.descontoPSV ? `Varejo ${p.descontoPSV}%` : null,
-    ].filter(Boolean).join(" / ");
-    return {
-      "Código": p.sku,
-      "Descrição": p.produto,
-      "Categoria": p.categoria || "",
-      "Preço Atacado": atacado ? Number(atacado.final.toFixed(2)) : null,
-      "Preço Varejo": varejo ? Number(varejo.final.toFixed(2)) : null,
-      "Desconto": descontoTxt,
-      "Estoque": p.estoqueAtual > 0 ? "Disponível" : "Indisponível",
-      "Compras": temCompra ? `Sim — ${mesChegada || "a definir"}` : "Não",
+      p.descontoAtacado ? `Ata. ${p.descontoAtacado}%` : null,
+      p.descontoPSV ? `Var. ${p.descontoPSV}%` : null,
+    ].filter(Boolean).join(" / ") || "—";
+
+    const rowH = 18;
+    if (doc.y + rowH > bottomLimit) {
+      doc.addPage();
+      doc.y = PDF_MARGIN;
+      pdfTableHeader(doc, tableX);
+    }
+
+    const rowY = doc.y; // mesmo cuidado do cabeçalho — fixa antes, não deixa text() acumular
+    doc.rect(tableX, rowY, tableWidth, rowH).strokeColor(PDF_BORDER).lineWidth(0.5).stroke();
+    const values = {
+      sku: p.sku,
+      produto: p.produto,
+      atacado: atacado ? fmtBRL(atacado.final) : "—",
+      varejo: varejo ? fmtBRL(varejo.final) : "—",
+      desconto: descontoTxt,
+      estoque: p.estoqueAtual > 0 ? "Disponível" : "Indisponível",
+      compras: temCompra ? `Sim — ${mesChegada || "a definir"}` : "Não",
     };
-  });
+    let cx = tableX;
+    doc.fontSize(8).fillColor(PDF_INK);
+    for (const col of PDF_COLS) {
+      doc.text(String(values[col.key] ?? ""), cx + 4, rowY + 5, { width: col.width - 8, height: rowH - 4, ellipsis: true, lineBreak: false });
+      cx += col.width;
+    }
+    doc.y = rowY + rowH;
+  }
 
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Tabela de Preços");
-  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  // Rodapé com a data do download, em TODAS as páginas — só dá pra saber quantas páginas
+  // existem depois de desenhar tudo, por isso isso roda no final, não página por página.
+  const dataDownload = new Date().toLocaleDateString("pt-BR") + " às " + new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const range = doc.bufferedPageRange();
+  for (let i = range.start; i < range.start + range.count; i++) {
+    doc.switchToPage(i);
+    // A margem inferior da página (40pt) faz o pdfkit entender "estourou" e criar uma página
+    // nova sozinho sempre que o texto é colocado dentro dela — mesmo com posição explícita.
+    // Desativa só pra essa escrita, já que é exatamente ali (na margem) que o rodapé mora.
+    const margemOriginal = doc.page.margins.bottom;
+    doc.page.margins.bottom = 0;
+    doc.fontSize(7.5).fillColor(PDF_MUTED).text(
+      `Baixado em ${dataDownload} — Página ${i + 1} de ${range.count}`,
+      PDF_MARGIN, doc.page.height - PDF_MARGIN + 4,
+      { width: doc.page.width - PDF_MARGIN * 2, align: "center", lineBreak: false }
+    );
+    doc.page.margins.bottom = margemOriginal;
+  }
 
-  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-  res.setHeader("Content-Disposition", `attachment; filename="tabela-de-precos.xlsx"`);
-  res.send(buffer);
+  doc.end();
 });
 
 function esc(s) {
