@@ -184,12 +184,12 @@ export default function Sortimento({ goTo }) {
         </div>
       ) : (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
+        <div style={{ overflow: "auto", maxHeight: "calc(100vh - 120px)" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1180 }}>
             <thead>
               <tr>
                 {["Produto", "Categoria", "Curva", "Giro médio/mês", "Preço Atacado", "Preço Varejo", "Margem Atacado", "Margem Varejo", "Estoque atual", "Cobertura (atual → ideal)", "Status"].map((h) => (
-                  <th key={h} style={{ textAlign: "left", fontSize: 9.5, fontWeight: 700, letterSpacing: 0.3, color: C.muted, textTransform: "uppercase", padding: "11px 14px", background: C.paper, borderBottom: `1px solid ${C.border}` }}>{h}</th>
+                  <th key={h} style={{ textAlign: "left", fontSize: 9.5, fontWeight: 700, letterSpacing: 0.3, color: C.muted, textTransform: "uppercase", padding: "11px 14px", background: C.paper, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 1 }}>{h}</th>
                 ))}
               </tr>
             </thead>
