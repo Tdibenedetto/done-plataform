@@ -1,9 +1,11 @@
 import { Router } from "express";
+import crypto from "crypto";
 import multer from "multer";
 import { prisma } from "../lib/prisma.js";
 import { requirePlan } from "../middleware/auth.js";
 import { mapProdutoColumns } from "../lib/claude.js";
 import { parseSpreadsheet } from "../lib/spreadsheet.js";
+import { calcularAlocacoes } from "../lib/estoque.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -12,6 +14,16 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 router.use(requirePlan(["vendas", "gestao", "completo"]));
 
 const STATUS_VALUES = ["ativo", "pausado", "descontinuado"];
+const EMBALAGEM_VALUES = ["Adesivo", "Blister", "Brownbox", "Cinta", "Giftbox", "Tag"];
+
+// Vira "metalurgica-bravo-ltda" — usado só para deixar a URL da tabela pública legível.
+function slugify(str) {
+  return String(str || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "empresa";
+}
 const CANONICAL_HEADERS = ["produto", "sku", "categoria", "marca", "subcategoria", "cmv", "precoAtacado", "precoPSV", "descontoAtacado", "descontoPSV", "estoqueAtual", "giroMedioMensal", "coberturaIdealDias"];
 
 // -------- Cálculo de margem e cobertura — mesma lógica testada isoladamente antes de integrar --------
@@ -22,7 +34,11 @@ function calcMargem(preco, cmv, desconto) {
   return ((precoFinal - cmv) / precoFinal) * 100;
 }
 
-function serializeProduto(p) {
+// `aloc` = { alocado, emCarteira } vindos dos leads Fechado/Carteira (ver lib/estoque.js).
+// alocado nunca passa do estoque, então disponível nunca fica negativo.
+function serializeProduto(p, aloc) {
+  const alocado = aloc?.alocado || 0;
+  const emCarteira = aloc?.emCarteira || 0;
   const margemAtacado = p.margemAtacadoManual ?? calcMargem(p.precoAtacado, p.cmv, null);
   const margemAtacadoDesconto = p.margemAtacadoDescontoManual ?? calcMargem(p.precoAtacado, p.cmv, p.descontoAtacado);
   const margemPSV = p.margemPSVManual ?? calcMargem(p.precoPSV, p.cmv, null);
@@ -43,10 +59,12 @@ function serializeProduto(p) {
     margemAtacado, margemAtacadoDesconto, margemPSV, margemPSVDesconto,
     margemAtacadoManual: p.margemAtacadoManual, margemAtacadoDescontoManual: p.margemAtacadoDescontoManual,
     margemPSVManual: p.margemPSVManual, margemPSVDescontoManual: p.margemPSVDescontoManual,
-    estoqueAtual: p.estoqueAtual, giroMedioMensal: p.giroMedioMensal,
+    estoqueAtual: p.estoqueAtual, alocado, emCarteira, disponivel: Math.max(0, p.estoqueAtual - alocado), giroMedioMensal: p.giroMedioMensal,
     compraProducao: p.compraProducao, dataChegada: p.dataChegada,
     coberturaIdealDias: p.coberturaIdealDias, coberturaAtualDias, coberturaProjetadaDias,
     abaixoCobertura, terminoDeEstoque, origemCadastro: p.origemCadastro, createdAt: p.createdAt,
+    altura: p.altura, largura: p.largura, comprimento: p.comprimento, pesoGross: p.pesoGross, pesoNet: p.pesoNet,
+    caixaMaster: p.caixaMaster, tipoEmbalagem: p.tipoEmbalagem, ncm: p.ncm,
   };
 }
 
@@ -66,26 +84,6 @@ function computeCurvaABC(produtos, criterio) {
   }
   return curvas;
 }
-
-// -------- Listagem, com curva ABC no critério salvo do usuário (ou o informado via query) --------
-router.get("/", async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { sortimentoAbcCriterio: true } });
-  const criterio = req.query.criterio === "faturamento" || req.query.criterio === "giro" ? req.query.criterio : user?.sortimentoAbcCriterio || "giro";
-
-  const produtos = await prisma.produto.findMany({ where: { organizationId: req.organizationId }, orderBy: { produto: "asc" } });
-  const curvas = computeCurvaABC(produtos, criterio);
-
-  res.json({
-    criterio,
-    produtos: produtos.map((p) => ({ ...serializeProduto(p), curva: curvas[p.id] })),
-  });
-});
-
-router.get("/:id", async (req, res) => {
-  const produto = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
-  if (!produto) return res.status(404).json({ error: "Produto não encontrado." });
-  res.json(serializeProduto(produto));
-});
 
 function validateBody(body, { partial = false } = {}) {
   const data = {};
@@ -110,6 +108,18 @@ function validateBody(body, { partial = false } = {}) {
   }
   if (body.coberturaIdealDias !== undefined) data.coberturaIdealDias = body.coberturaIdealDias === null || body.coberturaIdealDias === "" ? null : Math.round(Number(body.coberturaIdealDias));
 
+  for (const f of ["altura", "largura", "comprimento", "pesoGross", "pesoNet"]) {
+    if (body[f] !== undefined) data[f] = body[f] === null || body[f] === "" ? null : Number(body[f]);
+  }
+  if (body.caixaMaster !== undefined) data.caixaMaster = body.caixaMaster === null || body.caixaMaster === "" ? null : Math.round(Number(body.caixaMaster));
+  if (body.tipoEmbalagem !== undefined) {
+    if (body.tipoEmbalagem && !EMBALAGEM_VALUES.includes(body.tipoEmbalagem)) {
+      return { error: `Tipo de embalagem inválido. Use um de: ${EMBALAGEM_VALUES.join(", ")}.` };
+    }
+    data.tipoEmbalagem = body.tipoEmbalagem || null;
+  }
+  if (body.ncm !== undefined) data.ncm = body.ncm ? String(body.ncm).trim() : null;
+
   // Compra/produção sempre exige mês de chegada — sem isso a cobertura projetada não sabe quando contar.
   if (body.compraProducao !== undefined && data.compraProducao != null) {
     if (!body.dataChegada) return { error: "Informe o mês de chegada da compra/produção." };
@@ -120,6 +130,31 @@ function validateBody(body, { partial = false } = {}) {
   return { data };
 }
 
+// =====================================================================================
+// IMPORTANTE: todas as rotas de CAMINHO FIXO (/tabela-publica, /preferencias/..., /upload)
+// precisam vir ANTES das rotas genéricas /:id abaixo. O Express casa rotas na ordem em que
+// são registradas — "/:id" aceita QUALQUER segmento único, incluindo a palavra literal
+// "tabela-publica". Bug real que já aconteceu aqui: GET /tabela-publica estava sendo
+// respondido pela rota GET /:id (tratando "tabela-publica" como se fosse um id de produto),
+// nunca chegando na rota certa — o pedido "funcionava" (200 ou 404), só que errado, e o
+// frontend ficava preso em "Carregando..." porque não reconhecia aquele formato de resposta.
+// =====================================================================================
+
+// -------- Listagem, com curva ABC no critério salvo do usuário (ou o informado via query) --------
+router.get("/", async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { sortimentoAbcCriterio: true } });
+  const criterio = req.query.criterio === "faturamento" || req.query.criterio === "giro" ? req.query.criterio : user?.sortimentoAbcCriterio || "giro";
+
+  const produtos = await prisma.produto.findMany({ where: { organizationId: req.organizationId }, orderBy: { produto: "asc" } });
+  const curvas = computeCurvaABC(produtos, criterio);
+  const { porProduto } = await calcularAlocacoes(prisma, req.organizationId);
+
+  res.json({
+    criterio,
+    produtos: produtos.map((p) => ({ ...serializeProduto(p, porProduto[p.id]), curva: curvas[p.id] })),
+  });
+});
+
 router.post("/", async (req, res) => {
   const { data, error } = validateBody(req.body);
   if (error) return res.status(400).json({ error });
@@ -129,24 +164,6 @@ router.post("/", async (req, res) => {
 
   const produto = await prisma.produto.create({ data: { ...data, organizationId: req.organizationId, origemCadastro: "manual" } });
   res.status(201).json(serializeProduto(produto));
-});
-
-router.put("/:id", async (req, res) => {
-  const existing = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
-  if (!existing) return res.status(404).json({ error: "Produto não encontrado." });
-
-  const { data, error } = validateBody(req.body, { partial: true });
-  if (error) return res.status(400).json({ error });
-
-  const produto = await prisma.produto.update({ where: { id: existing.id }, data });
-  res.json(serializeProduto(produto));
-});
-
-router.delete("/:id", async (req, res) => {
-  const existing = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
-  if (!existing) return res.status(404).json({ error: "Produto não encontrado." });
-  await prisma.produto.delete({ where: { id: existing.id } });
-  res.json({ ok: true });
 });
 
 // -------- Preferência de visualização da curva ABC (por usuário, não por organização) --------
@@ -214,6 +231,60 @@ router.post("/upload", upload.single("file"), async (req, res) => {
   }
 
   res.json({ created, updated, skipped, mappingUsed: mapping });
+});
+
+// -------- Tabela de preços pública: status do link atual --------
+router.get("/tabela-publica", async (req, res) => {
+  const existing = await prisma.tabelaPrecoPublica.findUnique({ where: { organizationId: req.organizationId } });
+  res.json(existing ? { token: existing.token, slug: existing.slug, createdAt: existing.createdAt } : null);
+});
+
+// Gerar sempre REVOGA o link anterior — é a decisão do usuário (não um link fixo pra sempre).
+// Apaga e recria numa transação pra nunca deixar a organização com dois tokens nem com zero
+// por um instante em caso de erro no meio do caminho.
+router.post("/tabela-publica/gerar", async (req, res) => {
+  const org = await prisma.organization.findUnique({ where: { id: req.organizationId }, select: { name: true } });
+  const slug = slugify(org?.name);
+  // 4 bytes (8 caracteres hex) é de sobra pra não adivinharem por tentativa — a URL fica curta
+  // de propósito, já que agora tem o nome da empresa junto (link mais legível pra compartilhar).
+  const token = crypto.randomBytes(4).toString("hex");
+  await prisma.$transaction([
+    prisma.tabelaPrecoPublica.deleteMany({ where: { organizationId: req.organizationId } }),
+    prisma.tabelaPrecoPublica.create({ data: { organizationId: req.organizationId, token, slug } }),
+  ]);
+  res.json({ token, slug });
+});
+
+router.delete("/tabela-publica", async (req, res) => {
+  await prisma.tabelaPrecoPublica.deleteMany({ where: { organizationId: req.organizationId } });
+  res.json({ ok: true });
+});
+
+// -------- A partir daqui, só rotas genéricas por :id --------
+router.get("/:id", async (req, res) => {
+  const produto = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
+  if (!produto) return res.status(404).json({ error: "Produto não encontrado." });
+  const { porProduto } = await calcularAlocacoes(prisma, req.organizationId, { produtoIds: [produto.id] });
+  res.json(serializeProduto(produto, porProduto[produto.id]));
+});
+
+router.put("/:id", async (req, res) => {
+  const existing = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
+  if (!existing) return res.status(404).json({ error: "Produto não encontrado." });
+
+  const { data, error } = validateBody(req.body, { partial: true });
+  if (error) return res.status(400).json({ error });
+
+  const produto = await prisma.produto.update({ where: { id: existing.id }, data });
+  const { porProduto } = await calcularAlocacoes(prisma, req.organizationId, { produtoIds: [produto.id] });
+  res.json(serializeProduto(produto, porProduto[produto.id]));
+});
+
+router.delete("/:id", async (req, res) => {
+  const existing = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
+  if (!existing) return res.status(404).json({ error: "Produto não encontrado." });
+  await prisma.produto.delete({ where: { id: existing.id } });
+  res.json({ ok: true });
 });
 
 export default router;

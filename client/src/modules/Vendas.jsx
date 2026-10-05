@@ -108,7 +108,8 @@ export default function FerramentaVendas({ goTo }) {
     setMoveError(null);
     try {
       if (dir > 0 && idx === PIPELINE_STAGES.length - 1) {
-        await api.leadUpdate(lead.id, { stage: "Fechado" });
+        const r = await api.leadUpdate(lead.id, { stage: "Fechado" });
+        if (r?.avisoEstoque) setMoveError(r.avisoEstoque);
       } else {
         const next = PIPELINE_STAGES[Math.min(Math.max(idx + dir, 0), PIPELINE_STAGES.length - 1)];
         await api.leadUpdate(lead.id, { stage: next });
@@ -133,10 +134,14 @@ export default function FerramentaVendas({ goTo }) {
     if (!invoiceAmount || Number(invoiceAmount) <= 0) return;
     setInvoiceBusy(true);
     try {
-      await api.leadInvoice(invoiceFor.id, invoiceAmount);
+      const r = await api.leadInvoice(invoiceFor.id, invoiceAmount);
+      if (r?.avisoEstoque) setMoveError(r.avisoEstoque);
       setInvoiceFor(null);
       setInvoiceAmount("");
       reload();
+    } catch (e) {
+      setMoveError(e.message);
+      setInvoiceFor(null);
     } finally {
       setInvoiceBusy(false);
     }
@@ -264,7 +269,7 @@ export default function FerramentaVendas({ goTo }) {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
                 {filteredLeads.filter((l) => l.stage === stage).map((l) => (
-                  <div key={l.id} onClick={() => setOpenLead(l)} style={{ background: C.card, border: `1px solid ${isOverdue(l) ? C.danger : C.border}`, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 6, cursor: "pointer" }}>
+                  <div key={l.id} onClick={() => setOpenLead(l)} style={{ background: l.prontoParaFaturar ? "#EEF6F1" : C.card, border: `1px solid ${l.prontoParaFaturar ? C.sage : isOverdue(l) ? C.danger : C.border}`, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 6, cursor: "pointer" }}>
                     <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3, display: "flex", justifyContent: "space-between", gap: 6 }}>
                       <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                         {l.source === "whatsapp" && <Phone size={11} color={C.sage} title={`Captado via WhatsApp${l.phone ? " · " + l.phone : ""}`} />}
@@ -277,7 +282,22 @@ export default function FerramentaVendas({ goTo }) {
                       )}
                     </div>
 
-                    {l.cliente?.status === "bloqueado" && (
+                    {l.items?.length > 0 && (
+                      <div style={{ fontSize: 10, color: C.muted }} title={l.items.map((it) => `${it.produto.sku} × ${it.quantidade}`).join("\n")}>
+                        {l.items.length} {l.items.length === 1 ? "produto" : "produtos"} · {l.stage === "Faturado Total" ? "estoque baixado" : !(l.stage === "Fechado" || l.stage === "Carteira") ? "sem alocação ainda" : l.pendencias?.includes("credito") ? "sem alocação (crédito)" : l.pendencias?.includes("estoque") ? "parte aguardando estoque" : "estoque alocado"}
+                      </div>
+                    )}
+
+                    {(l.stage === "Fechado" || l.stage === "Carteira") && (l.prontoParaFaturar || l.pendencias?.length > 0) && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {l.prontoParaFaturar && <span style={{ fontSize: 9.5, fontWeight: 700, color: "#fff", background: C.sage, borderRadius: 6, padding: "3px 7px" }}>✓ Pronto para faturar</span>}
+                        {l.pendencias?.includes("estoque") && <span style={{ fontSize: 9.5, fontWeight: 700, color: "#8A6423", background: C.goldSoft, borderRadius: 6, padding: "3px 7px" }}>Aguardando estoque</span>}
+                        {l.pendencias?.includes("credito") && <span style={{ fontSize: 9.5, fontWeight: 700, color: C.danger, background: C.dangerSoft, borderRadius: 6, padding: "3px 7px", display: "flex", alignItems: "center", gap: 4 }} title={l.cliente?.statusMotivo || "Cliente bloqueado por crédito"}><Lock size={10} /> Aguardando crédito</span>}
+                        {l.pendencias?.includes("saldo") && <span style={{ fontSize: 9.5, fontWeight: 700, color: C.inkSoft, background: C.paper, border: `1px solid ${C.border}`, borderRadius: 6, padding: "2px 7px" }}>Saldo a faturar</span>}
+                      </div>
+                    )}
+
+                    {l.cliente?.status === "bloqueado" && !(l.stage === "Fechado" || l.stage === "Carteira") && (
                       <div style={{ fontSize: 9.5, fontWeight: 700, color: C.danger, background: C.dangerSoft, borderRadius: 6, padding: "4px 7px", display: "flex", alignItems: "center", gap: 4 }} title={l.cliente.statusMotivo || "Cliente bloqueado por crédito"}>
                         <Lock size={10} /> Crédito bloqueado
                       </div>
@@ -420,9 +440,55 @@ function LeadDetailModal({ lead, onClose }) {
   const [value, setValue] = useState(lead.value ?? "");
   const [valueMsg, setValueMsg] = useState(null);
 
+  const [itens, setItens] = useState(null);
+  const [itemSku, setItemSku] = useState("");
+  const [itemQtd, setItemQtd] = useState("");
+  const [itemMsg, setItemMsg] = useState(null);
+  const [itemBusy, setItemBusy] = useState(false);
+
   const reload = useCallback(async () => {
     setNotes(await api.leadNotesList(lead.id));
   }, [lead.id]);
+
+  useEffect(() => {
+    api.leadItemsList(lead.id).then((r) => setItens(r.items)).catch(() => setItens([]));
+  }, [lead.id]);
+
+  async function addItem() {
+    if (!itemSku.trim() || !itemQtd) return;
+    setItemBusy(true);
+    setItemMsg(null);
+    try {
+      const r = await api.leadItemAdd(lead.id, itemSku.trim(), itemQtd);
+      setItens(r.items);
+      setItemSku("");
+      setItemQtd("");
+      if (r.aviso) setItemMsg(r.aviso);
+    } catch (e) {
+      setItemMsg(e.message);
+    } finally {
+      setItemBusy(false);
+    }
+  }
+  async function removeItem(itemId) {
+    setItemMsg(null);
+    try {
+      const r = await api.leadItemRemove(lead.id, itemId);
+      setItens(r.items);
+    } catch (e) {
+      setItemMsg(e.message);
+    }
+  }
+  const itensTravados = lead.stage === "Faturado Total";
+  const itensStatus = lead.stage === "Faturado Total"
+    ? "Pedido faturado — estoque já baixado no Sortimento."
+    : lead.stage === "Fechado" || lead.stage === "Carteira"
+      ? lead.pendencias?.includes("credito")
+        ? "Em carteira aguardando crédito — o estoque só é alocado depois que o cliente for desbloqueado."
+        : lead.pendencias?.includes("estoque")
+          ? "Em carteira aguardando estoque — quando o produto entrar, o pedido fica verde sozinho."
+          : "Pedido fechado — produtos alocados para o cliente. Pronto para faturar."
+      : "A alocação de estoque começa quando o lead for fechado.";
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -474,7 +540,7 @@ function LeadDetailModal({ lead, onClose }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(28,33,48,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }} onClick={onClose}>
-      <div style={{ background: C.card, borderRadius: 14, padding: 24, width: 460, maxHeight: "85vh", display: "flex", flexDirection: "column" }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ background: C.card, borderRadius: 14, padding: 24, width: 460, maxWidth: "94vw", maxHeight: "85vh", display: "flex", flexDirection: "column", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 16 }}>{lead.name}</div>
@@ -543,11 +609,51 @@ function LeadDetailModal({ lead, onClose }) {
           </div>
         )}
 
+        <div style={{ marginTop: 18 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 12.5, color: C.inkSoft }}>Produtos do pedido</div>
+          <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2, marginBottom: 8 }}>{itensStatus}</div>
+
+          {itens === null && <div style={{ fontSize: 12, color: C.muted }}>Carregando...</div>}
+          {itens && itens.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+              {itens.map((it) => (
+                <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 8, background: C.paper, borderRadius: 8, padding: "7px 10px" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.produto}</div>
+                    <div style={{ fontSize: 10.5, color: C.muted }}>
+                      {it.sku}
+                      {it.baixado && ` · ${it.quantidadeBaixada} un baixadas do estoque`}
+                      {!it.baixado && it.semAlocacaoPorCredito && <b style={{ color: C.danger }}> · sem alocação (crédito bloqueado)</b>}
+                      {!it.baixado && !it.semAlocacaoPorCredito && it.alocado != null && ` · ${it.alocado} alocado`}
+                      {!it.baixado && it.alocado == null && ` · ${it.disponivel} un disponíveis`}
+                      {!it.baixado && it.emCarteira > 0 && <b style={{ color: C.danger }}> · {it.emCarteira} em carteira</b>}
+                      {!it.baixado && it.alocado == null && it.quantidade > it.disponivel && <b style={{ color: C.danger }}> · {it.quantidade - it.disponivel} entram em carteira ao fechar</b>}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.ink, whiteSpace: "nowrap" }}>{it.quantidade} un</span>
+                  {!itensTravados && (
+                    <button onClick={() => removeItem(it.id)} title="Remover produto" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, display: "flex" }}><Trash2 size={13} /></button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!itensTravados && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <input style={{ ...S.input, padding: "6px 10px", fontSize: 12, flex: 1, minWidth: 0 }} placeholder="Código do produto (SKU)" value={itemSku} onChange={(e) => setItemSku(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addItem()} />
+              <input type="number" min={0} step="any" style={{ ...S.input, padding: "6px 10px", fontSize: 12, width: 80 }} placeholder="Qtd" value={itemQtd} onChange={(e) => setItemQtd(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addItem()} />
+              <button style={S.primaryBtnSm} disabled={itemBusy} onClick={addItem}>Incluir</button>
+            </div>
+          )}
+          {itemMsg && <div style={{ fontSize: 11, color: C.danger, marginTop: 4 }}>{itemMsg}</div>}
+        </div>
+
         <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 12.5, color: C.inkSoft, marginTop: 18, marginBottom: 8 }}>
           Histórico e notas
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, paddingRight: 4 }}>
+        <div style={{ flex: "1 0 auto", display: "flex", flexDirection: "column", gap: 10, paddingRight: 4 }}>
           {notes === null && <div style={{ fontSize: 12, color: C.muted }}>Carregando...</div>}
           {notes && notes.length === 0 && <div style={{ fontSize: 12, color: C.muted }}>Nenhuma nota ainda.</div>}
           {notes && notes.map((n) => (
@@ -880,6 +986,28 @@ function CarteiraPanel({ team, leads, isMaster }) {
   );
 }
 
+// Prévia ao vivo do link de logo — pega exatamente o erro que um link de página (em vez do
+// arquivo da imagem em si) causa, sem precisar abrir a Tabela de Preços Online pra descobrir.
+function LogoPreview({ url }) {
+  const [state, setState] = useState("loading");
+  useEffect(() => {
+    setState("loading");
+    const img = new Image();
+    img.onload = () => setState("ok");
+    img.onerror = () => setState("erro");
+    img.src = url;
+  }, [url]);
+
+  if (state === "loading") return <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>Carregando prévia...</div>;
+  if (state === "erro") return <div style={{ fontSize: 10.5, color: C.danger, marginTop: 2 }}>✗ Não carregou — confira se é o link direto da imagem, não o link de uma página.</div>;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+      <img src={url} alt="" style={{ height: 28, maxWidth: 100, objectFit: "contain", border: `1px solid ${C.border}`, borderRadius: 6, padding: 2 }} />
+      <span style={{ fontSize: 10.5, color: C.sage }}>✓ Carregou</span>
+    </div>
+  );
+}
+
 function TeamPanel({ team, isMaster, onChange }) {
   const me = team.users.find((u) => u.id === loadSession().user.id);
   const [email, setEmail] = useState("");
@@ -890,6 +1018,9 @@ function TeamPanel({ team, isMaster, onChange }) {
   const [savingPhone, setSavingPhone] = useState(false);
   const [days, setDays] = useState(team.followUpDays || 3);
   const [savingDays, setSavingDays] = useState(false);
+  const [logoUrl, setLogoUrl] = useState(team.logoUrl || "");
+  const [savingLogo, setSavingLogo] = useState(false);
+  const [logoMsg, setLogoMsg] = useState(null);
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState(null);
   const [testingWeekly, setTestingWeekly] = useState(false);
@@ -934,6 +1065,19 @@ function TeamPanel({ team, isMaster, onChange }) {
       onChange();
     } finally {
       setSavingDays(false);
+    }
+  }
+
+  async function saveLogo() {
+    setSavingLogo(true); setLogoMsg(null);
+    try {
+      await api.teamSetLogo(logoUrl.trim());
+      setLogoMsg("Salvo.");
+      onChange();
+    } catch (e) {
+      setLogoMsg(e.message);
+    } finally {
+      setSavingLogo(false);
     }
   }
 
@@ -1007,6 +1151,17 @@ function TeamPanel({ team, isMaster, onChange }) {
             <span style={{ fontSize: 10.5, color: C.muted }}>dispara a checagem na hora, sem esperar o agendador</span>
           </div>
           {testMsg && <div style={{ fontSize: 11, color: C.inkSoft }}>{testMsg}</div>}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+            <div style={{ fontSize: 11.5, color: C.inkSoft, whiteSpace: "nowrap" }}>Logo da sua empresa (link direto da imagem)</div>
+            <input style={{ ...S.input, flex: "1 1 220px", fontSize: 11.5 }} placeholder="https://.../logo.png" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} />
+            <button style={S.ghostBtn} disabled={savingLogo} onClick={saveLogo}>{savingLogo ? "Salvando..." : "Salvar"}</button>
+          </div>
+          <div style={{ fontSize: 10, color: C.muted }}>
+            Tem que ser o link direto do arquivo da imagem (termina em .png, .jpg…), não o link de uma página que mostra o logo — clique com o botão direito em cima da imagem e escolha "Copiar endereço da imagem". Aparece na Tabela de Preços Online (Sortimento) no lugar da marca D.O.N.E.
+          </div>
+          {logoUrl && <LogoPreview url={logoUrl} />}
+          {logoMsg && <div style={{ fontSize: 11, color: C.inkSoft }}>{logoMsg}</div>}
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
             <button style={{ ...S.ghostBtn, fontSize: 11.5 }} disabled={testingWeekly} onClick={runWeeklyTest}>{testingWeekly ? "Enviando..." : "Testar relatório semanal"}</button>

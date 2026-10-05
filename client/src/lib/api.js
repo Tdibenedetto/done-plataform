@@ -87,6 +87,9 @@ Object.assign(api, {
   leadNotesList: (id) => request(`/leads/${id}/notes`),
   leadNoteAdd: (id, content) => request(`/leads/${id}/notes`, { method: "POST", body: { content } }),
   leadInvoice: (id, amount) => request(`/leads/${id}/invoice`, { method: "POST", body: { amount } }),
+  leadItemsList: (id) => request(`/leads/${id}/items`),
+  leadItemAdd: (id, sku, quantidade) => request(`/leads/${id}/items`, { method: "POST", body: { sku, quantidade } }),
+  leadItemRemove: (id, itemId) => request(`/leads/${id}/items/${itemId}`, { method: "DELETE" }),
   creditoList: () => request("/credito"),
   creditoCnpj: (cnpj) => request("/credito/cnpj", { method: "POST", body: { cnpj } }),
   clientesList: () => request("/clientes"),
@@ -117,6 +120,13 @@ Object.assign(api, {
   chatThreadResolve: (id) => request(`/chat/threads/${id}/resolve`, { method: "POST" }),
   teamSetPhone: (phone) => request("/team/phone", { method: "PATCH", body: { phone } }),
   teamSetFollowupDays: (followUpDays) => request("/team/followup-settings", { method: "PATCH", body: { followUpDays } }),
+  teamSetLogo: (logoUrl) => request("/team/logo", { method: "PATCH", body: { logoUrl } }),
+  tabelaPublicaStatus: () => request("/produtos/tabela-publica"),
+  tabelaPublicaGerar: () => request("/produtos/tabela-publica/gerar", { method: "POST" }),
+  tabelaPublicaRevogar: () => request("/produtos/tabela-publica", { method: "DELETE" }),
+  // precos.donestrategy.com aponta pro mesmo done-api (domínio dedicado só pra deixar o link
+  // bonito) — continua funcionando pelo endereço antigo também, essa é só a forma preferida.
+  tabelaPublicaUrl: (slug, token) => `https://precos.donestrategy.com/tabela/${encodeURIComponent(slug || "empresa")}/${token}`,
   teamFollowupTest: () => request("/team/followup-test", { method: "POST" }),
   teamGrantTestAccess: (modules) => request("/team/grant-test-access", { method: "POST", body: { modules } }),
   teamWeeklyReportTest: () => request("/team/weekly-report-test", { method: "POST" }),

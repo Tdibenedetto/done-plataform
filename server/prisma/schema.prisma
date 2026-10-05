@@ -24,6 +24,8 @@ model Organization {
   clientes      Cliente[]
   gruposEconomicos GrupoEconomico[]
   produtos      Produto[]
+  logoUrl       String?   // link colado pelo usuário — aparece na tabela de preços pública no lugar da marca D.O.N.E
+  tabelaPublica TabelaPrecoPublica?
   goals         Goal[]
   coachResults  CoachResult[]
   gestaoUploads GestaoUpload[]
@@ -108,15 +110,38 @@ model Lead {
   lostReason     String?
   expectedCloseDate DateTime?
   margemReal     Float?
+  fechadoEm      DateTime?    // quando entrou em Fechado — define a ordem da fila de alocação de estoque
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
   notes LeadNote[]
   invoiceEvents InvoiceEvent[]
+  items LeadItem[]
 
   @@index([organizationId])
   @@index([assignedUserId])
   @@index([clienteId])
+}
+
+// Produtos do pedido de um lead. A alocação de estoque NÃO é um número guardado: ela é calculada
+// na hora a partir dos itens ainda não baixados de leads em "Fechado" ou "Carteira" (ver
+// lib/estoque.js). Por isso, apagar o lead, marcar como perdido ou voltar de etapa devolve o
+// estoque sem nenhum ajuste. A baixa definitiva (Produto.estoqueAtual diminui) só acontece em
+// "Faturado Total" — aí baixadoEm e quantidadeBaixada são preenchidos.
+model LeadItem {
+  id         String   @id @default(uuid())
+  leadId     String
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  produtoId  String
+  produto    Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  quantidade Float
+  baixadoEm  DateTime?
+  quantidadeBaixada Float? // quanto saiu de fato do estoque na baixa (só a parte alocada)
+  createdAt  DateTime @default(now())
+
+  @@unique([leadId, produtoId])
+  @@index([leadId])
+  @@index([produtoId])
 }
 
 model InvoiceEvent {
@@ -194,13 +219,40 @@ model Produto {
 
   coberturaIdealDias Int? // editável por produto (não por categoria/marca)
 
+  // Dimensões e embalagem — cm e kg, livre (não validamos unidade, é o padrão que a empresa usa)
+  altura       Float?
+  largura      Float?
+  comprimento  Float?
+  pesoGross    Float?
+  pesoNet      Float?
+  caixaMaster  Int?    // unidades por caixa master
+  tipoEmbalagem String? // Adesivo | Blister | Brownbox | Cinta | Giftbox | Tag
+  ncm          String?
+
   origemCadastro String @default("manual") // "manual" | "planilha"
+
+  leadItems LeadItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([organizationId, sku])
   @@index([organizationId])
+}
+
+// Link público (sem login) da tabela de preços. Uma organização tem no máximo um token ativo
+// por vez — "gerar novo link" apaga o registro antigo e cria outro, invalidando o anterior na
+// hora (decisão do usuário: quer poder revogar, não um link fixo pra sempre).
+model TabelaPrecoPublica {
+  id             String       @id @default(uuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // O link fica /tabela/:slug/:token — slug é só estético (nome da empresa, pode ficar
+  // desatualizado se a empresa for renomeada depois, sem problema) e token é o que realmente
+  // identifica e autoriza o acesso (único, curto o bastante pra URL ficar legível).
+  slug           String?
+  token          String       @unique
+  createdAt      DateTime     @default(now())
 }
 
 model GestaoUpload {

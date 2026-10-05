@@ -20,8 +20,8 @@ router.get("/", async (req, res) => {
     where: { organizationId: req.organizationId, status: "pending" },
     select: { id: true, email: true, createdAt: true, expiresAt: true },
   });
-  const org = await prisma.organization.findUnique({ where: { id: req.organizationId }, select: { followUpDays: true, followUpError: true, followUpErrorAt: true } });
-  res.json({ users, invites, maxTeamSize: MAX_TEAM_SIZE, followUpDays: org.followUpDays, followUpError: org.followUpError, followUpErrorAt: org.followUpErrorAt });
+  const org = await prisma.organization.findUnique({ where: { id: req.organizationId }, select: { followUpDays: true, followUpError: true, followUpErrorAt: true, logoUrl: true } });
+  res.json({ users, invites, maxTeamSize: MAX_TEAM_SIZE, followUpDays: org.followUpDays, followUpError: org.followUpError, followUpErrorAt: org.followUpErrorAt, logoUrl: org.logoUrl });
 });
 
 // Cada usuário define o próprio telefone (E.164), usado nos lembretes automáticos de follow-up.
@@ -44,6 +44,14 @@ router.patch("/followup-settings", requireMaster, async (req, res) => {
   }
   await prisma.organization.update({ where: { id: req.organizationId }, data: { followUpDays: days } });
   res.json({ ok: true });
+});
+
+// Logo da própria empresa cliente — aparece na tabela de preços pública no lugar da marca D.O.N.E.
+// Só o link é guardado (colado pelo usuário), sem upload de arquivo.
+router.patch("/logo", requireMaster, async (req, res) => {
+  const logoUrl = (req.body.logoUrl || "").trim();
+  await prisma.organization.update({ where: { id: req.organizationId }, data: { logoUrl: logoUrl || null } });
+  res.json({ ok: true, logoUrl: logoUrl || null });
 });
 
 // Apenas o Master pode disparar a checagem de follow-up manualmente, sem esperar o agendador automático.
