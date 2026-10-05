@@ -221,7 +221,19 @@ export default function Sortimento({ goTo }) {
                     <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}` }}>
                       <ComboCell original={p.margemPSV} comDesconto={p.margemPSVDesconto} format={fmtPct} />
                     </td>
-                    <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 12.5 }}>{p.estoqueAtual} un</td>
+                    <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}`, fontSize: 12.5 }}>
+                      {p.estoqueAtual} un
+                      {p.alocado > 0 && (
+                        <div style={{ fontSize: 10.5, color: C.muted, whiteSpace: "nowrap" }} title="Alocado = produtos de pedidos Fechados ou em Carteira (módulo de Vendas)">
+                          {p.alocado} alocado · <b>{p.disponivel} disponível</b>
+                        </div>
+                      )}
+                      {p.emCarteira > 0 && (
+                        <div style={{ fontSize: 10.5, fontWeight: 700, color: C.danger, whiteSpace: "nowrap" }} title="Vendido acima do estoque — aguardando entrada de produto">
+                          {p.emCarteira} em carteira
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}` }}>
                       {p.coberturaIdealDias ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -395,7 +407,7 @@ function ProdutoDetail({ produto, onBack, onChanged }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
         <StatCard label="Giro Médio/Mês" value={produto.giroMedioMensal != null ? `${produto.giroMedioMensal.toFixed(1)} un` : "—"} />
-        <StatCard label="Estoque Atual" value={`${produto.estoqueAtual} un`} color={produto.abaixoCobertura ? C.danger : undefined} sub={produto.coberturaAtualDias != null ? `${produto.coberturaAtualDias} dias de cobertura` : undefined} />
+        <StatCard label="Estoque Atual" value={`${produto.estoqueAtual} un`} color={produto.abaixoCobertura ? C.danger : undefined} sub={[produto.alocado > 0 ? `${produto.alocado} alocado · ${produto.disponivel} disponível` : null, produto.emCarteira > 0 ? `${produto.emCarteira} em carteira` : null, produto.coberturaAtualDias != null ? `${produto.coberturaAtualDias} dias de cobertura` : null].filter(Boolean).join(" · ") || undefined} />
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 15px" }}>
           <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.3, color: C.muted, textTransform: "uppercase" }}>Cobertura Ideal (dias)</div>
           <input style={{ ...S.input, marginTop: 6, fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, padding: "4px 8px", width: 80 }} type="number" value={form.coberturaIdealDias ?? ""} onChange={(e) => setForm({ ...form, coberturaIdealDias: e.target.value })} onBlur={() => save({ coberturaIdealDias: form.coberturaIdealDias || null })} />

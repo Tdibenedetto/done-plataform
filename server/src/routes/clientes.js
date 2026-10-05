@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requirePlan } from "../middleware/auth.js";
+import { RESERVA_STAGES } from "../lib/estoque.js";
 
 const router = Router();
 
@@ -133,6 +134,15 @@ router.put("/:id/status", async (req, res) => {
   if (!cliente) return res.status(404).json({ error: "Cliente não encontrado." });
 
   await prisma.cliente.update({ where: { id: cliente.id }, data: { status, statusMotivo: status === "ativo" ? null : (motivo || null) } });
+
+  // Desbloqueou: os pedidos deste cliente que estavam em Carteira aguardando crédito entram agora
+  // na fila de estoque — no fim dela, para não tirar produto de quem já estava alocado.
+  if (cliente.status === "bloqueado" && status !== "bloqueado") {
+    await prisma.lead.updateMany({
+      where: { clienteId: cliente.id, organizationId: req.organizationId, stage: { in: RESERVA_STAGES } },
+      data: { fechadoEm: new Date() },
+    });
+  }
   res.json({ ok: true, status });
 });
 

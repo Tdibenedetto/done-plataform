@@ -110,15 +110,38 @@ model Lead {
   lostReason     String?
   expectedCloseDate DateTime?
   margemReal     Float?
+  fechadoEm      DateTime?    // quando entrou em Fechado — define a ordem da fila de alocação de estoque
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
   notes LeadNote[]
   invoiceEvents InvoiceEvent[]
+  items LeadItem[]
 
   @@index([organizationId])
   @@index([assignedUserId])
   @@index([clienteId])
+}
+
+// Produtos do pedido de um lead. A alocação de estoque NÃO é um número guardado: ela é calculada
+// na hora a partir dos itens ainda não baixados de leads em "Fechado" ou "Carteira" (ver
+// lib/estoque.js). Por isso, apagar o lead, marcar como perdido ou voltar de etapa devolve o
+// estoque sem nenhum ajuste. A baixa definitiva (Produto.estoqueAtual diminui) só acontece em
+// "Faturado Total" — aí baixadoEm e quantidadeBaixada são preenchidos.
+model LeadItem {
+  id         String   @id @default(uuid())
+  leadId     String
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  produtoId  String
+  produto    Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  quantidade Float
+  baixadoEm  DateTime?
+  quantidadeBaixada Float? // quanto saiu de fato do estoque na baixa (só a parte alocada)
+  createdAt  DateTime @default(now())
+
+  @@unique([leadId, produtoId])
+  @@index([leadId])
+  @@index([produtoId])
 }
 
 model InvoiceEvent {
@@ -207,6 +230,8 @@ model Produto {
   ncm          String?
 
   origemCadastro String @default("manual") // "manual" | "planilha"
+
+  leadItems LeadItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

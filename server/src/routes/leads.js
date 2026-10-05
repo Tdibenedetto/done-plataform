@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requirePlan } from "../middleware/auth.js";
 import { findOrCreateCliente } from "../lib/clientes.js";
+import { RESERVA_STAGES, BAIXA_STAGE, calcularAlocacoes, aplicarEstoqueNaMudancaDeEtapa, itensEmCarteira, pendenciasDoLead } from "../lib/estoque.js";
 
 const router = Router();
 const STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação", "Fechado", "Carteira", "Faturado Total", "Perdido"];
@@ -27,10 +28,13 @@ router.get("/", async (req, res) => {
       _count: { select: { notes: true } },
       invoiceEvents: { select: { id: true, amount: true, date: true }, orderBy: { date: "asc" } },
       cliente: { select: { id: true, status: true, statusMotivo: true } },
+      items: { select: { id: true, quantidade: true, baixadoEm: true, produto: { select: { sku: true, produto: true } } }, orderBy: { createdAt: "asc" } },
     },
     orderBy: { createdAt: "asc" },
   });
-  res.json(leads);
+  // Motivo de cada pedido fechado ainda não ter faturado + se já está pronto para faturar (verde).
+  const { porItem } = await calcularAlocacoes(prisma, req.organizationId);
+  res.json(leads.map((l) => ({ ...l, ...pendenciasDoLead(l, porItem) })));
 });
 
 router.post("/", async (req, res) => {
@@ -112,21 +116,41 @@ router.patch("/:id", async (req, res) => {
     data.clienteId = clienteId || null;
   }
 
-  // Cliente bloqueado (gestão de crédito) não pode ter lead fechado sem aprovação manual —
-  // aqui é só a trava automática; "aprovação manual" hoje significa desbloquear o cliente primeiro.
-  if (stage === "Fechado") {
+  // Cliente bloqueado (gestão de crédito): a venda PODE fechar, mas vai para Carteira como
+  // "aguardando crédito", sem alocar estoque. O que não pode é faturar enquanto estiver bloqueado.
+  let clienteBloqueado = null;
+  if (stage && (RESERVA_STAGES.includes(stage) || stage === BAIXA_STAGE)) {
     const targetClienteId = data.clienteId !== undefined ? data.clienteId : existing.clienteId;
     if (targetClienteId) {
       const cliente = await prisma.cliente.findUnique({ where: { id: targetClienteId } });
-      if (cliente?.status === "bloqueado") {
-        return res.status(402).json({
-          error: `Cliente bloqueado por crédito${cliente.statusMotivo ? `: ${cliente.statusMotivo}` : "."} Desbloqueie o cliente na Análise de Crédito antes de fechar este lead.`,
-        });
-      }
+      if (cliente?.status === "bloqueado") clienteBloqueado = cliente;
     }
   }
+  if (clienteBloqueado && stage === BAIXA_STAGE && existing.stage !== BAIXA_STAGE) {
+    return res.status(402).json({ error: msgCreditoBloqueado(clienteBloqueado) });
+  }
 
-  await prisma.lead.update({ where: { id: existing.id }, data });
+  // Entrou agora em Fechado/Carteira: marca o momento — é a posição do pedido na fila de estoque.
+  const fechandoAgora = !!stage && RESERVA_STAGES.includes(stage) && !RESERVA_STAGES.includes(existing.stage);
+  if (fechandoAgora) data.fechadoEm = new Date();
+
+  let naoBaixados = [];
+  let pendentesEstoque = [];
+  let etapaFinal = stage || existing.stage;
+  await prisma.$transaction(async (tx) => {
+    // Estoque primeiro, etapa depois: a baixa precisa ver a alocação do lead como está agora.
+    if (stage) naoBaixados = await aplicarEstoqueNaMudancaDeEtapa(tx, req.organizationId, existing.id, existing.stage, stage);
+    await tx.lead.update({ where: { id: existing.id }, data });
+
+    // Fechou com pendência (crédito ou estoque)? Vai direto para Carteira, com o motivo.
+    if (fechandoAgora) {
+      if (!clienteBloqueado) pendentesEstoque = await itensEmCarteira(tx, req.organizationId, existing.id);
+      if ((clienteBloqueado || pendentesEstoque.length > 0) && stage !== "Carteira") {
+        await tx.lead.update({ where: { id: existing.id }, data: { stage: "Carteira" } });
+        etapaFinal = "Carteira";
+      }
+    }
+  });
 
   // Marcar como perdido já registra o motivo no histórico do lead.
   if (stage === "Perdido") {
@@ -138,9 +162,30 @@ router.patch("/:id", async (req, res) => {
       },
     });
   }
-  res.json({ ok: true });
+
+  // Ao fechar, explica (sem bloquear) por que o pedido foi para Carteira.
+  let avisoEstoque = null;
+  if (fechandoAgora && clienteBloqueado) {
+    avisoEstoque = `Pedido foi para Carteira — aguardando crédito: cliente bloqueado${clienteBloqueado.statusMotivo ? ` (${clienteBloqueado.statusMotivo})` : ""}. O estoque só será alocado depois do desbloqueio na Análise de Crédito.`;
+  } else if (fechandoAgora && pendentesEstoque.length > 0) {
+    avisoEstoque = "Pedido foi para Carteira — aguardando estoque: " + pendentesEstoque.map((f) => `${f.sku} (${f.alocado} alocado, ${f.emCarteira} em carteira)`).join("; ") + ".";
+  } else if (naoBaixados.length > 0) {
+    avisoEstoque = avisoNaoBaixados(naoBaixados);
+  }
+  res.json({ ok: true, stage: etapaFinal, avisoEstoque });
 });
 
+function msgCreditoBloqueado(cliente) {
+  return `Cliente bloqueado por crédito${cliente.statusMotivo ? `: ${cliente.statusMotivo}` : "."} O pedido fica em Carteira até o cliente ser desbloqueado na Análise de Crédito.`;
+}
+
+function avisoNaoBaixados(lista) {
+  return "Pedido faturado com itens em carteira — só o alocado saiu do estoque: " + lista.map((f) => `${f.sku} (pedido ${f.quantidade}, baixado ${f.baixado})`).join("; ") + ".";
+}
+
+// Apagar o lead apaga os itens junto (cascade). Como a alocação é calculada a partir dos itens em
+// aberto, o estoque alocado volta a ficar disponível automaticamente. Se o lead já estava em
+// "Faturado Total", a baixa foi definitiva e o estoque NÃO volta.
 router.delete("/:id", async (req, res) => {
   const where = leadWhere(req, req.params.id);
   await prisma.lead.deleteMany({ where });
@@ -163,14 +208,103 @@ router.post("/:id/invoice", async (req, res) => {
   if (!["Fechado", "Carteira"].includes(lead.stage)) {
     return res.status(400).json({ error: "Só é possível faturar pedidos em Fechado ou Carteira." });
   }
-
-  await prisma.invoiceEvent.create({ data: { leadId: lead.id, amount: amt } });
+  // Pedido aguardando crédito não fatura — é exatamente por isso que ele está em Carteira.
+  if (lead.clienteId) {
+    const cliente = await prisma.cliente.findUnique({ where: { id: lead.clienteId } });
+    if (cliente?.status === "bloqueado") return res.status(402).json({ error: msgCreditoBloqueado(cliente) });
+  }
 
   const totalInvoiced = lead.invoiceEvents.reduce((s, e) => s + e.amount, 0) + amt;
   const newStage = totalInvoiced >= lead.value ? "Faturado Total" : "Carteira";
-  await prisma.lead.update({ where: { id: lead.id }, data: { stage: newStage } });
+  // Faturamento parcial (Carteira) mantém a alocação; só o Faturado Total dá baixa no estoque.
+  let naoBaixados = [];
+  await prisma.$transaction(async (tx) => {
+    await tx.invoiceEvent.create({ data: { leadId: lead.id, amount: amt } });
+    naoBaixados = await aplicarEstoqueNaMudancaDeEtapa(tx, req.organizationId, lead.id, lead.stage, newStage);
+    await tx.lead.update({ where: { id: lead.id }, data: { stage: newStage } });
+  });
 
-  res.json({ ok: true, stage: newStage, totalInvoiced });
+  res.json({ ok: true, stage: newStage, totalInvoiced, avisoEstoque: naoBaixados.length > 0 ? avisoNaoBaixados(naoBaixados) : null });
+});
+
+// -------- Produtos do pedido (itens do lead) --------
+// O vendedor digita o código (SKU) e a quantidade. Enquanto o lead está antes de "Fechado", é só
+// um rascunho do pedido; em "Fechado"/"Carteira" vira alocação; em "Faturado Total" vira baixa.
+async function listarItens(organizationId, leadId) {
+  const itens = await prisma.leadItem.findMany({
+    where: { leadId },
+    include: { produto: { select: { id: true, sku: true, produto: true, estoqueAtual: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const { porProduto, porItem } = await calcularAlocacoes(prisma, organizationId, { produtoIds: itens.map((i) => i.produtoId) });
+  return itens.map((it) => ({
+    id: it.id,
+    produtoId: it.produtoId,
+    sku: it.produto.sku,
+    produto: it.produto.produto,
+    quantidade: it.quantidade,
+    baixado: !!it.baixadoEm,
+    quantidadeBaixada: it.baixadoEm ? (it.quantidadeBaixada ?? it.quantidade) : null,
+    // preenchidos só quando o lead está em Fechado/Carteira (item disputando estoque)
+    alocado: porItem[it.id]?.alocado ?? null,
+    emCarteira: porItem[it.id]?.emCarteira ?? null,
+    semAlocacaoPorCredito: porItem[it.id]?.semAlocacaoPorCredito || false,
+    // estoque livre do produto agora: físico menos tudo o que já está alocado
+    disponivel: Math.max(0, it.produto.estoqueAtual - (porProduto[it.produtoId]?.alocado || 0)),
+  }));
+}
+
+router.get("/:id/items", async (req, res) => {
+  const lead = await prisma.lead.findFirst({ where: leadWhere(req, req.params.id) });
+  if (!lead) return res.status(404).json({ error: "Lead não encontrado." });
+  res.json({ stage: lead.stage, alocando: RESERVA_STAGES.includes(lead.stage), items: await listarItens(req.organizationId, lead.id) });
+});
+
+router.post("/:id/items", async (req, res) => {
+  const sku = String(req.body.sku || "").trim();
+  const quantidade = Number(req.body.quantidade);
+  if (!sku) return res.status(400).json({ error: "Digite o código do produto." });
+  if (!quantidade || isNaN(quantidade) || quantidade <= 0) return res.status(400).json({ error: "Informe uma quantidade maior que zero." });
+
+  const lead = await prisma.lead.findFirst({ where: leadWhere(req, req.params.id) });
+  if (!lead) return res.status(404).json({ error: "Lead não encontrado." });
+  if (lead.stage === BAIXA_STAGE) {
+    return res.status(400).json({ error: "Este pedido já foi faturado por completo — o estoque já foi baixado e os produtos não podem mais ser alterados." });
+  }
+
+  // Código exato primeiro; se não achar, tenta ignorando maiúsculas/minúsculas.
+  let produto = await prisma.produto.findUnique({ where: { organizationId_sku: { organizationId: req.organizationId, sku } } });
+  if (!produto) {
+    produto = await prisma.produto.findFirst({ where: { organizationId: req.organizationId, sku: { equals: sku, mode: "insensitive" } } });
+  }
+  if (!produto) return res.status(404).json({ error: `Nenhum produto com o código "${sku}" no Sortimento.` });
+
+  // Mesmo produto lançado de novo = atualiza a quantidade (não duplica a linha).
+  await prisma.leadItem.upsert({
+    where: { leadId_produtoId: { leadId: lead.id, produtoId: produto.id } },
+    create: { leadId: lead.id, produtoId: produto.id, quantidade },
+    update: { quantidade },
+  });
+
+  const items = await listarItens(req.organizationId, lead.id);
+  const item = items.find((i) => i.produtoId === produto.id);
+  let aviso = null;
+  if (item && item.emCarteira > 0) {
+    aviso = `${produto.sku}: ${item.alocado} un alocadas e ${item.emCarteira} un em carteira (sem estoque).`;
+  } else if (item && item.alocado == null && item.quantidade > item.disponivel) {
+    aviso = `${produto.sku} tem ${item.disponivel} un disponíveis — ao fechar, ${item.quantidade - item.disponivel} un entram em carteira.`;
+  }
+  res.json({ stage: lead.stage, alocando: RESERVA_STAGES.includes(lead.stage), items, aviso });
+});
+
+router.delete("/:id/items/:itemId", async (req, res) => {
+  const lead = await prisma.lead.findFirst({ where: leadWhere(req, req.params.id) });
+  if (!lead) return res.status(404).json({ error: "Lead não encontrado." });
+  if (lead.stage === BAIXA_STAGE) {
+    return res.status(400).json({ error: "Este pedido já foi faturado por completo — os produtos não podem mais ser alterados." });
+  }
+  await prisma.leadItem.deleteMany({ where: { id: req.params.itemId, leadId: lead.id } });
+  res.json({ stage: lead.stage, alocando: RESERVA_STAGES.includes(lead.stage), items: await listarItens(req.organizationId, lead.id) });
 });
 
 // -------- Notas / histórico do lead --------

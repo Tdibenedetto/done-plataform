@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requirePlan } from "../middleware/auth.js";
 import { mapProdutoColumns } from "../lib/claude.js";
 import { parseSpreadsheet } from "../lib/spreadsheet.js";
+import { calcularAlocacoes } from "../lib/estoque.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -33,7 +34,11 @@ function calcMargem(preco, cmv, desconto) {
   return ((precoFinal - cmv) / precoFinal) * 100;
 }
 
-function serializeProduto(p) {
+// `aloc` = { alocado, emCarteira } vindos dos leads Fechado/Carteira (ver lib/estoque.js).
+// alocado nunca passa do estoque, então disponível nunca fica negativo.
+function serializeProduto(p, aloc) {
+  const alocado = aloc?.alocado || 0;
+  const emCarteira = aloc?.emCarteira || 0;
   const margemAtacado = p.margemAtacadoManual ?? calcMargem(p.precoAtacado, p.cmv, null);
   const margemAtacadoDesconto = p.margemAtacadoDescontoManual ?? calcMargem(p.precoAtacado, p.cmv, p.descontoAtacado);
   const margemPSV = p.margemPSVManual ?? calcMargem(p.precoPSV, p.cmv, null);
@@ -54,7 +59,7 @@ function serializeProduto(p) {
     margemAtacado, margemAtacadoDesconto, margemPSV, margemPSVDesconto,
     margemAtacadoManual: p.margemAtacadoManual, margemAtacadoDescontoManual: p.margemAtacadoDescontoManual,
     margemPSVManual: p.margemPSVManual, margemPSVDescontoManual: p.margemPSVDescontoManual,
-    estoqueAtual: p.estoqueAtual, giroMedioMensal: p.giroMedioMensal,
+    estoqueAtual: p.estoqueAtual, alocado, emCarteira, disponivel: Math.max(0, p.estoqueAtual - alocado), giroMedioMensal: p.giroMedioMensal,
     compraProducao: p.compraProducao, dataChegada: p.dataChegada,
     coberturaIdealDias: p.coberturaIdealDias, coberturaAtualDias, coberturaProjetadaDias,
     abaixoCobertura, terminoDeEstoque, origemCadastro: p.origemCadastro, createdAt: p.createdAt,
@@ -142,10 +147,11 @@ router.get("/", async (req, res) => {
 
   const produtos = await prisma.produto.findMany({ where: { organizationId: req.organizationId }, orderBy: { produto: "asc" } });
   const curvas = computeCurvaABC(produtos, criterio);
+  const { porProduto } = await calcularAlocacoes(prisma, req.organizationId);
 
   res.json({
     criterio,
-    produtos: produtos.map((p) => ({ ...serializeProduto(p), curva: curvas[p.id] })),
+    produtos: produtos.map((p) => ({ ...serializeProduto(p, porProduto[p.id]), curva: curvas[p.id] })),
   });
 });
 
@@ -258,7 +264,8 @@ router.delete("/tabela-publica", async (req, res) => {
 router.get("/:id", async (req, res) => {
   const produto = await prisma.produto.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
   if (!produto) return res.status(404).json({ error: "Produto não encontrado." });
-  res.json(serializeProduto(produto));
+  const { porProduto } = await calcularAlocacoes(prisma, req.organizationId, { produtoIds: [produto.id] });
+  res.json(serializeProduto(produto, porProduto[produto.id]));
 });
 
 router.put("/:id", async (req, res) => {
@@ -269,7 +276,8 @@ router.put("/:id", async (req, res) => {
   if (error) return res.status(400).json({ error });
 
   const produto = await prisma.produto.update({ where: { id: existing.id }, data });
-  res.json(serializeProduto(produto));
+  const { porProduto } = await calcularAlocacoes(prisma, req.organizationId, { produtoIds: [produto.id] });
+  res.json(serializeProduto(produto, porProduto[produto.id]));
 });
 
 router.delete("/:id", async (req, res) => {

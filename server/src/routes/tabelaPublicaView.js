@@ -1,6 +1,7 @@
 import { Router } from "express";
 import PDFDocument from "pdfkit";
 import { prisma } from "../lib/prisma.js";
+import { calcularAlocacoes } from "../lib/estoque.js";
 
 const router = Router();
 
@@ -11,6 +12,9 @@ async function loadTabela(token) {
   const link = await prisma.tabelaPrecoPublica.findUnique({ where: { token }, include: { organization: { select: { name: true, logoUrl: true } } } });
   if (!link) return null;
   const produtos = await prisma.produto.findMany({ where: { organizationId: link.organizationId, status: "ativo" }, orderBy: { produto: "asc" } });
+  // Estoque já alocado para pedidos fechados não aparece como disponível para outros clientes.
+  const { porProduto } = await calcularAlocacoes(prisma, link.organizationId);
+  for (const p of produtos) p.estoqueDisponivel = Math.max(0, p.estoqueAtual - (porProduto[p.id]?.alocado || 0));
   return { organization: link.organization, produtos };
 }
 
@@ -44,7 +48,7 @@ router.get("/tabela/:slug/:token", async (req, res) => {
   const rows = produtos.map((p) => {
     const atacado = precoComDesconto(p.precoAtacado, p.descontoAtacado);
     const varejo = precoComDesconto(p.precoPSV, p.descontoPSV);
-    const disponivel = p.estoqueAtual > 0;
+    const disponivel = p.estoqueDisponivel > 0;
     const temCompra = p.compraProducao != null && p.compraProducao > 0;
     const mesChegada = temCompra && p.dataChegada ? `${MESES[new Date(p.dataChegada).getUTCMonth()]}/${new Date(p.dataChegada).getUTCFullYear()}` : null;
     const descontoTxt = [
@@ -266,7 +270,7 @@ router.get("/tabela/:slug/:token/download", async (req, res) => {
       atacado: atacado ? fmtBRL(atacado.final) : "—",
       varejo: varejo ? fmtBRL(varejo.final) : "—",
       desconto: descontoTxt,
-      estoque: p.estoqueAtual > 0 ? "Disponível" : "Indisponível",
+      estoque: p.estoqueDisponivel > 0 ? "Disponível" : "Indisponível",
       compras: temCompra ? `Sim — ${mesChegada || "a definir"}` : "Não",
     };
     let cx = tableX;
