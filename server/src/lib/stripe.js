@@ -20,6 +20,8 @@ export const PRICES = {
   // Vendável sozinha (sem precisar de Vendas/Gestão/Completo) — mesmo preço do add-on de DRE,
   // por ter escopo/complexidade parecidos.
   credito: { label: "Análise de Crédito", amountCents: 14700 },
+  // Vendável sozinho (catálogo, curva ABC, cobertura e tabela de preços online) — também incluso em Vendas/Gestão/Completo.
+  sortimento: { label: "Gestão de Sortimento", amountCents: 14700 },
   // Add-ons pagos à parte — exigem assinatura ativa de Vendas, Gestão ou Completo (ver requireAddon).
   whatsapp: { label: "Add-on: Captação de Leads via WhatsApp", amountCents: 9700 },
   dre: { label: "Add-on: DRE Simplificado / Fluxo de Caixa", amountCents: 14700 },

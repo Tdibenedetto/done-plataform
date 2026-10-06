@@ -5,7 +5,7 @@ import { MAX_TEAM_SIZE } from "./auth.js";
 
 const router = Router();
 
-const BASE_MODULES = ["vendas", "gestao", "completo", "credito", "coach"];
+const BASE_MODULES = ["vendas", "gestao", "completo", "credito", "sortimento", "coach"];
 const ADDON_MODULES = ["whatsapp", "dre"];
 const ADDON_LABEL = { whatsapp: "WhatsApp", dre: "DRE" };
 

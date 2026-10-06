@@ -11,7 +11,7 @@ const router = Router();
 // isso é proposital, para que nenhum cliente possa se auto-conceder um trial infinito.
 // Conceder teste grátis é feito só pelo Admin Geral, via /admin-checkout-link abaixo.
 router.post("/checkout", requireMaster, async (req, res) => {
-  const { product } = req.body; // "coach" | "vendas" | "gestao" | "completo" | "credito" | "whatsapp" | "dre"
+  const { product } = req.body; // "coach" | "vendas" | "gestao" | "completo" | "credito" | "sortimento" | "whatsapp" | "dre"
   const price = PRICES[product];
   if (!price) return res.status(400).json({ error: "Produto inválido." });
 
@@ -46,7 +46,7 @@ router.post("/checkout", requireMaster, async (req, res) => {
 router.post("/admin-checkout-link", requirePlatformAdmin, async (req, res) => {
   const { organizationId, product, trialDays } = req.body;
   const price = PRICES[product];
-  if (!price || !["vendas", "gestao", "completo", "whatsapp", "dre"].includes(product)) {
+  if (!price || !["vendas", "gestao", "completo", "sortimento", "whatsapp", "dre"].includes(product)) {
     return res.status(400).json({ error: "Escolha um módulo ou add-on válido (período de teste não se aplica ao relatório avulso)." });
   }
   const days = Number(trialDays);

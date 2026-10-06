@@ -18,6 +18,19 @@ const PLANS = [
     ],
   },
   {
+    key: "sortimento",
+    name: "Gestão de Sortimento",
+    price: 147,
+    per: "/mês",
+    note: "Vendável sozinha. Já inclusa em Vendas, Gestão e Pacote Completo.",
+    features: [
+      "Catálogo com preço, margem e estoque",
+      "Curva ABC por giro ou faturamento",
+      "Cobertura de estoque com compras e produção",
+      "Tabela de preços online em PDF, com a sua logo",
+    ],
+  },
+  {
     key: "vendas",
     name: "Ferramenta de Vendas",
     price: 197,
@@ -48,10 +61,10 @@ const PLANS = [
     name: "Pacote Completo",
     price: 477,
     per: "/mês",
-    note: "Vendas + Gestão + Análise de Crédito, com desconto. +R$39/mês por usuário adicional.",
+    note: "Vendas + Gestão + Análise de Crédito + Gestão de Sortimento, com desconto. +R$39/mês por usuário adicional.",
     features: [
       "Tudo de Vendas e Gestão juntos",
-      "Análise de Crédito inclusa",
+      "Análise de Crédito e Gestão de Sortimento inclusos",
       "Prioridade no suporte",
     ],
     highlight: true,
@@ -83,7 +96,7 @@ export default function Planos() {
     .filter((s) => s.status === "active" || s.status === "trialing")
     .map((s) => s.module);
   const trialingModules = (status?.subscriptions || []).filter((s) => s.status === "trialing").map((s) => s.module);
-  const currentBase = ["completo", "gestao", "vendas", "credito"].find((m) => activeModules.includes(m)) || null;
+  const currentBase = ["completo", "gestao", "vendas", "credito", "sortimento"].find((m) => activeModules.includes(m)) || null;
 
   async function subscribe(product) {
     setBusyKey(product);

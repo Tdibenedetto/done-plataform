@@ -11,7 +11,7 @@ const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 // Mesmo padrão de acesso dos outros módulos operacionais.
-router.use(requirePlan(["vendas", "gestao", "completo"]));
+router.use(requirePlan(["vendas", "gestao", "completo", "sortimento"]));
 
 const STATUS_VALUES = ["ativo", "pausado", "descontinuado"];
 const EMBALAGEM_VALUES = ["Adesivo", "Blister", "Brownbox", "Cinta", "Giftbox", "Tag"];
