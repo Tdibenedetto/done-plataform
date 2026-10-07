@@ -15,8 +15,15 @@ export default function Suporte() {
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef(null);
 
+  const [loadError, setLoadError] = useState(null);
+
   async function reload() {
-    setThreads(await api.chatThreadsInbox());
+    try {
+      setThreads(await api.chatThreadsInbox());
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(e.message);
+    }
   }
   useEffect(() => { reload(); }, []);
 
@@ -56,6 +63,7 @@ export default function Suporte() {
     }
   }
 
+  if (threads === null && loadError) return <div style={{ color: C.danger, fontSize: 13 }}>{loadError} <button style={{ ...S.ghostBtn, marginLeft: 8, padding: "4px 10px", fontSize: 12 }} onClick={reload}>Tentar novamente</button></div>;
   if (threads === null) return <div style={{ color: C.muted, fontSize: 13 }}>Carregando...</div>;
 
   const open = threads.filter((t) => t.status === "escalated");
@@ -65,7 +73,7 @@ export default function Suporte() {
     <div style={S.moduleCol}>
       <div>
         <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 24, margin: 0 }}>Suporte</h2>
-        <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>Conversas do chat da plataforma que pediram para falar com alguém do time de suporte.</p>
+        <p style={{ fontSize: 14, color: C.inkSoft, margin: "4px 0 0" }}>Clientes de todas as empresas que pediram para falar com alguém do time de suporte no chat. Você também recebe um e-mail a cada novo pedido.</p>
       </div>
 
       {open.length === 0 && resolved.length === 0 && (
@@ -82,7 +90,12 @@ export default function Suporte() {
       {activeId && detail && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5 }}>{detail.thread.user?.name}</div>
+            <div>
+              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: 14.5 }}>{detail.thread.user?.name}</div>
+              <div style={{ fontSize: 11.5, color: C.muted }}>
+                {[detail.thread.organization?.name, detail.thread.user?.email].filter(Boolean).join(" · ")}
+              </div>
+            </div>
             {detail.thread.status !== "resolved" && (
               <button onClick={resolve} disabled={busy} style={{ ...S.ghostBtn, fontSize: 11.5, padding: "6px 10px" }}>
                 <CheckCircle2 size={13} /> Marcar como resolvida
@@ -143,7 +156,9 @@ function ThreadList({ title, items, activeId, onOpen, muted }) {
             padding: "10px 12px", cursor: "pointer", fontFamily: "Inter",
           }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>{t.user?.name}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>
+                {t.user?.name}{t.organization?.name ? <span style={{ fontWeight: 500, color: C.muted }}> · {t.organization.name}</span> : null}
+              </div>
               <div style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {t.messages[0]?.content || "Sem mensagens"}
               </div>

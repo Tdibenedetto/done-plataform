@@ -18,6 +18,11 @@ router.put("/", requireMaster, async (req, res) => {
   const { userId, target, month } = req.body;
   if (!userId || !month) return res.status(400).json({ error: "Vendedor e mês são obrigatórios." });
 
+  // O vendedor precisa ser da MESMA empresa — sem isso, um Master conseguia gravar (e sobrescrever)
+  // a meta de um usuário de outra empresa, bastando conhecer o código interno dele.
+  const target_user = await prisma.user.findFirst({ where: { id: userId, organizationId: req.organizationId } });
+  if (!target_user) return res.status(400).json({ error: "Vendedor inválido." });
+
   const target_ = Number(target) || 0;
   const goal = await prisma.goal.upsert({
     where: { userId_month: { userId, month } },

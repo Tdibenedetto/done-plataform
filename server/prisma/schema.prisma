@@ -37,6 +37,9 @@ model Organization {
   followUpAlerts FollowUpAlert[]
   dreEntries     DreEntry[]
   dreSaldoInicial Float @default(0) // saldo de caixa inicial, usado como base do fluxo de caixa acumulado
+  // Cliente no Stripe — gravado no primeiro pagamento e reaproveitado nos seguintes, para que todas
+  // as assinaturas da empresa fiquem no MESMO cliente (um portal só para cancelar/trocar cartão).
+  stripeCustomerId String?
   creditAlerts   CreditAlert[]
 }
 
@@ -58,8 +61,23 @@ model User {
   leadNotes     LeadNote[]
   creditAnalyses CreditAnalysis[]
   supportThreads SupportThread[]
+  passwordResets PasswordReset[]
 
   @@index([organizationId])
+}
+
+// Pedido de redefinição de senha ("esqueci minha senha"). Guardamos só o HASH do código que vai
+// no link do e-mail — quem tiver acesso ao banco não consegue montar o link. Vale 1 hora e 1 uso.
+model PasswordReset {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Invite {
@@ -398,6 +416,7 @@ model Subscription {
   stripeSubscriptionId String?  @unique
   currentPeriodEnd     DateTime?
   canceledAt           DateTime? // preenchido quando o webhook recebe subscription.deleted — usado para calcular churn
+  cancelAtPeriodEnd    Boolean  @default(false) // cliente pediu cancelamento: segue com acesso até currentPeriodEnd
   createdAt            DateTime @default(now())
 
   @@index([organizationId])

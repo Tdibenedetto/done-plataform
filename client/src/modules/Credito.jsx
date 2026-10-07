@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { CreditCard, Search, Upload, CheckCircle2, XCircle, Building2, History, Bell, BellOff, AlertTriangle, Users, Layers } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
-import { api, loadSession } from "../lib/api.js";
+import { api, loadSession, isPlanLocked } from "../lib/api.js";
+import ModuleError from "../components/ModuleError.jsx";
 import ClientesPanel from "./Clientes.jsx";
 import GruposPanel from "./Grupos.jsx";
 
@@ -11,6 +12,7 @@ export default function Credito({ goTo }) {
   const [history, setHistory] = useState(null);
   const [locked, setLocked] = useState(false);
   const [lockMessage, setLockMessage] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [cnpjInput, setCnpjInput] = useState("");
   const [busyCnpj, setBusyCnpj] = useState(false);
   const [error, setError] = useState(null);
@@ -28,9 +30,11 @@ export default function Credito({ goTo }) {
   async function reload() {
     try {
       setHistory(await api.creditoList());
+      setLoadError(null);
     } catch (e) {
-      setLocked(true);
-      setLockMessage(e.message);
+      // Só é "plano bloqueado" quando o servidor diz isso (402). Qualquer outra falha é erro de carregamento.
+      if (isPlanLocked(e)) { setLocked(true); setLockMessage(e.message); }
+      else setLoadError(e.message);
     }
   }
   useEffect(() => { reload(); }, []);
@@ -118,6 +122,10 @@ export default function Credito({ goTo }) {
     }
   }
 
+  if (loadError && history === null) {
+    return <ModuleError title="Análise de Crédito" message={loadError} onRetry={() => { setLoadError(null); reload(); }} />;
+  }
+
   if (locked) {
     return (
       <div style={S.moduleCol}>
@@ -126,7 +134,7 @@ export default function Credito({ goTo }) {
             <CreditCard size={22} color="#fff" />
           </div>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>Análise de Crédito</div>
-          <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>{lockMessage || "Este recurso é exclusivo para assinantes de Vendas, Gestão ou do Pacote Completo."}</p>
+          <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>{lockMessage || "Este recurso faz parte da Análise de Crédito — avulsa ou inclusa em Vendas, Gestão e no Pacote Completo."}</p>
           <button style={S.primaryBtn} onClick={() => goTo?.("planos")}>Ver planos</button>
           {isPlatformAdmin && (
             <button style={S.ghostBtn} disabled={granting} onClick={grantTestAccess}>

@@ -4,7 +4,8 @@ import {
 } from "recharts";
 import { Upload, X, List, Target, Lightbulb, Link2 } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
-import { api, loadSession } from "../lib/api.js";
+import { api, loadSession, isPlanLocked } from "../lib/api.js";
+import ModuleError from "../components/ModuleError.jsx";
 
 const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const MES_ABBR = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -37,15 +38,20 @@ export default function FerramentaGestao({ goTo }) {
   const [mapNotice, setMapNotice] = useState(null);
   const [locked, setLocked] = useState(false);
   const [lockMessage, setLockMessage] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [loadedOnce, setLoadedOnce] = useState(false);
 
   async function reload() {
     try {
       const [all, gs] = await Promise.all([api.gestaoAll(), api.gestaoGoals()]);
       setData(all);
       setGoals(gs);
+      setLoadError(null);
+      setLoadedOnce(true);
     } catch (e) {
-      setLocked(true);
-      setLockMessage(e.message);
+      // Só é "plano bloqueado" quando o servidor diz isso (402). Qualquer outra falha é erro de carregamento.
+      if (isPlanLocked(e)) { setLocked(true); setLockMessage(e.message); }
+      else setLoadError(e.message);
       return;
     }
     // Cruzamento Vendas × Margem é um extra — cliente só de Gestão (sem Vendas/Completo)
@@ -92,6 +98,10 @@ export default function FerramentaGestao({ goTo }) {
   async function saveMonthGoal(value) {
     await api.gestaoGoalSet({ month: currentMonthKey(), target: Number(value) || 0 });
     reload();
+  }
+
+  if (loadError && !loadedOnce) {
+    return <ModuleError title="Ferramenta de Gestão" message={loadError} onRetry={() => { setLoadError(null); reload(); }} />;
   }
 
   if (locked) {

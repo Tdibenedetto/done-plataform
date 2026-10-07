@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Plus, Trash2, UserPlus, X, Mail, MessageSquare, Calendar, Filter, TrendingUp, DollarSign, Briefcase, Phone, LineChart as LineChartIcon, Lock } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
-import { api, loadSession } from "../lib/api.js";
+import { api, loadSession, isPlanLocked } from "../lib/api.js";
+import ModuleError from "../components/ModuleError.jsx";
 
 const STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação", "Fechado", "Carteira", "Faturado Total", "Perdido"];
 const PIPELINE_STAGES = ["Novo Lead", "Qualificação", "Proposta", "Negociação"]; // avançam com ◀ ▶ simples
@@ -20,6 +21,7 @@ function saldoRestante(lead) {
 export default function FerramentaVendas({ goTo }) {
   const [locked, setLocked] = useState(false);
   const [lockMessage, setLockMessage] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const session = loadSession();
   const isMaster = session?.user?.role === "master";
 
@@ -49,9 +51,11 @@ export default function FerramentaVendas({ goTo }) {
       setLeads(ls);
       setGoals(gs);
       setTeam(tm);
+      setLoadError(null);
     } catch (e) {
-      setLocked(true);
-      setLockMessage(e.message);
+      // Só é "plano bloqueado" quando o servidor diz isso (402). Qualquer outra falha é erro de carregamento.
+      if (isPlanLocked(e)) { setLocked(true); setLockMessage(e.message); }
+      else setLoadError(e.message);
     }
   }, []);
 
@@ -66,6 +70,12 @@ export default function FerramentaVendas({ goTo }) {
       return true;
     });
   }, [leads, filters]);
+
+  // Falha ao carregar pela primeira vez → tela de erro com "tentar novamente". Se os dados já
+  // estavam na tela e só uma atualização falhou, mantém o que está visível.
+  if (loadError && (leads === null || team === null)) {
+    return <ModuleError title="Ferramenta de Vendas" message={loadError} onRetry={() => { setLoadError(null); reload(); }} />;
+  }
 
   if (locked) {
     return (

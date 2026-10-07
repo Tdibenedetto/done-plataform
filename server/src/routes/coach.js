@@ -52,6 +52,17 @@ router.post("/:id/generate-report", async (req, res) => {
   const result = await prisma.coachResult.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
   if (!result) return res.status(404).json({ error: "Relatório não encontrado." });
 
+  // Trava de verdade (antes só existia na tela): o diagnóstico e a nota são gratuitos, mas o
+  // relatório completo — que consome IA — só é gerado para quem tem o Comercial Coach liberado.
+  // Mesma regra da tela: assinatura ativa/em teste OU a compra avulsa antiga.
+  const [coachSub, legacyPayment] = await Promise.all([
+    prisma.subscription.findFirst({ where: { organizationId: req.organizationId, module: "coach", status: { in: ["active", "trialing"] } } }),
+    prisma.payment.findFirst({ where: { organizationId: req.organizationId, type: "coach_report" } }),
+  ]);
+  if (!coachSub && !legacyPayment) {
+    return res.status(402).json({ error: "O relatório completo faz parte da assinatura do Comercial Coach." });
+  }
+
   if (result.detailedAnalysis) return res.json(result); // já foi gerada — não gasta IA de novo
 
   if (!result.answers) {

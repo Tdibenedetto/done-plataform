@@ -81,10 +81,14 @@ export default function ComercialCoach({ goTo, onResult }) {
   const [unlocked, setUnlocked] = useState(false);
   const [checkingBilling, setCheckingBilling] = useState(true);
   const [history, setHistory] = useState([]);
+  const [submitError, setSubmitError] = useState(null);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutError, setCheckoutError] = useState(null);
 
   useEffect(() => {
     Promise.all([api.coachLatest(), api.coachHistory().catch(() => [])])
       .then(([r, h]) => { setResult(r); setHistory(h); if (r) setStage("results"); })
+      .catch(() => {}) // sem conexão: cai na tela inicial do diagnóstico, que tem seu próprio tratamento de erro
       .finally(() => setLoading(false));
   }, []);
 
@@ -133,12 +137,32 @@ export default function ComercialCoach({ goTo, onResult }) {
         pipeline: questions.pipeline.map((_, i) => answers[`pipeline-${i}`]),
       },
     };
-    const saved = await api.coachSubmit(payload);
-    setResult(saved);
-    setHistory((h) => [...h, saved]);
-    if (onResult) onResult(saved);
-    setSubmitting(false);
-    setStage("results");
+    setSubmitError(null);
+    // Antes, se o envio falhasse (internet, servidor), o botão ficava preso em "Calculando..." para
+    // sempre e as respostas se perdiam. Agora as respostas ficam na tela e a pessoa tenta de novo.
+    try {
+      const saved = await api.coachSubmit(payload);
+      setResult(saved);
+      setHistory((h) => [...h, saved]);
+      if (onResult) onResult(saved);
+      setStage("results");
+    } catch (e) {
+      setSubmitError(`${e.message} Suas respostas continuam aqui — é só clicar de novo.`);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function subscribeCoach() {
+    setCheckoutBusy(true);
+    setCheckoutError(null);
+    try {
+      const r = await api.checkout("coach");
+      window.location.href = r.url;
+    } catch (e) {
+      setCheckoutError(e.message);
+      setCheckoutBusy(false);
+    }
   }
 
   function reset() { setResult(null); setSegment(null); setAnswers({}); setStage("landing"); }
@@ -231,6 +255,9 @@ export default function ComercialCoach({ goTo, onResult }) {
             {submitting ? "Calculando..." : dimIndex < DIMENSIONS.length - 1 ? "Próxima dimensão →" : "Ver minha nota →"}
           </button>
         </div>
+        {submitError && (
+          <div style={{ background: C.dangerSoft, color: C.danger, borderRadius: 10, padding: "10px 14px", fontSize: 12.5, fontWeight: 600 }}>{submitError}</div>
+        )}
       </div>
     );
   }
@@ -302,9 +329,10 @@ export default function ComercialCoach({ goTo, onResult }) {
           <p style={{ fontSize: 13.5, opacity: 0.8, lineHeight: 1.55, maxWidth: 440, margin: "0 0 10px" }}>
             Análise detalhada de cada resposta, comparação com o benchmark do seu segmento e um plano de ação completo — com reavaliação automática a cada trimestre, para acompanhar sua evolução.
           </p>
-          <button style={S.primaryBtn} onClick={() => api.checkout("coach").then((r) => (window.location.href = r.url))}>
-            Assinar relatório completo
+          <button style={{ ...S.primaryBtn, opacity: checkoutBusy ? 0.6 : 1 }} disabled={checkoutBusy} onClick={subscribeCoach}>
+            {checkoutBusy ? "Redirecionando..." : "Assinar relatório completo"}
           </button>
+          {checkoutError && <div style={{ fontSize: 12.5, color: "#F3B4A4", marginTop: 4 }}>{checkoutError}</div>}
         </div>
       ))}
 

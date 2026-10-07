@@ -40,7 +40,10 @@ export default function VisaoGeral({ coachResult, goTo }) {
 
   useEffect(() => {
     (async () => {
-      const [ls, gs] = await Promise.all([api.leadsList(), api.goalsList()]);
+      // Quem ainda não assina Vendas (toda conta recém-criada) recebe "plano não inclui" (402) nestas
+      // duas chamadas. Antes isso derrubava o carregamento e a Visão Geral — a PRIMEIRA tela depois do
+      // cadastro — ficava presa em "Carregando..." para sempre. Agora a tela abre com os números zerados.
+      const [ls, gs] = await Promise.all([api.leadsList().catch(() => []), api.goalsList().catch(() => [])]);
       setLeads(ls);
       setGoals(gs);
       if (isMaster) {
