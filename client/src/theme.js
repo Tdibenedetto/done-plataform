@@ -11,6 +11,8 @@ export const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?famil
 
 // Breakpoint único usado em toda a plataforma para o comportamento mobile.
 export const RESPONSIVE_CSS = `
+  @keyframes done-spin { to { transform: rotate(360deg); } }
+  .done-spin { animation: done-spin 1s linear infinite; }
   .done-sidebar { transition: left .25s ease; }
   .done-mobile-topbar { display: none; }
   .done-sidebar-overlay { display: none; }

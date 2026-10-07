@@ -5,22 +5,63 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function request(path, { method = "GET", body, isForm = false } = {}) {
-  const res = await fetch(`${API_URL}${path}`, {
-    method,
-    headers: isForm ? authHeaders() : { "Content-Type": "application/json", ...authHeaders() },
-    body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Erro desconhecido." }));
-    throw new Error(err.error || "Erro desconhecido.");
+// Erro de chamada ao servidor, com o código HTTP junto — é isso que permite às telas diferenciar
+// "seu plano não inclui isto" (402) de "a internet caiu" ou "o servidor falhou". Antes, QUALQUER
+// erro virava a tela de "exclusivo para assinantes", inclusive para quem estava pagando.
+export class ApiError extends Error {
+  constructor(message, status, code) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status; // 0 = não chegou no servidor (sem internet / servidor fora do ar)
+    this.code = code || null;
   }
-  return res.json();
+}
+// true só quando o servidor respondeu que o plano não cobre o recurso (ou o pagamento está pendente).
+export const isPlanLocked = (e) => e?.status === 402;
+
+const NETWORK_MESSAGE = "Não foi possível conectar ao servidor. Verifique sua internet e tente de novo.";
+const SERVER_MESSAGE = "O servidor não respondeu como esperado. Tente de novo em instantes.";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function request(path, { method = "GET", body, isForm = false } = {}) {
+  // Leituras (GET) são repetidas sozinhas em caso de falha passageira — rede oscilando ou servidor
+  // reiniciando numa publicação. Gravações nunca são repetidas, para não duplicar nada.
+  const attempts = method === "GET" ? 3 : 1;
+  const hadToken = !!localStorage.getItem("done-token");
+
+  for (let attempt = 1; ; attempt++) {
+    let res;
+    try {
+      res = await fetch(`${API_URL}${path}`, {
+        method,
+        headers: isForm ? authHeaders() : { "Content-Type": "application/json", ...authHeaders() },
+        body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
+      });
+    } catch {
+      if (attempt < attempts) { await sleep(1200 * attempt); continue; }
+      throw new ApiError(NETWORK_MESSAGE, 0, "network");
+    }
+    if ([502, 503, 504].includes(res.status) && attempt < attempts) { await sleep(1200 * attempt); continue; }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      // Sessão vencida ou inválida: volta para o login com um aviso, em vez de mostrar telas quebradas.
+      if (res.status === 401 && hadToken && !path.startsWith("/auth/")) {
+        window.dispatchEvent(new Event("done-session-expired"));
+        throw new ApiError("Sua sessão expirou. Entre de novo.", 401, "session_expired");
+      }
+      throw new ApiError(err.error || (res.status >= 500 ? SERVER_MESSAGE : "Não foi possível concluir a ação."), res.status, err.code);
+    }
+    return res.json();
+  }
 }
 
 export const api = {
   register: (data) => request("/auth/register", { method: "POST", body: data }),
   login: (data) => request("/auth/login", { method: "POST", body: data }),
+  forgotPassword: (email) => request("/auth/forgot", { method: "POST", body: { email } }),
+  resetInfo: (token) => request(`/auth/reset/${token}`),
+  resetPassword: (token, password) => request(`/auth/reset/${token}`, { method: "POST", body: { password } }),
 
   coachSubmit: (data) => request("/coach/submit", { method: "POST", body: data }),
   coachLatest: () => request("/coach/latest"),
@@ -60,6 +101,8 @@ export const api = {
 
   checkout: (product) => request("/billing/checkout", { method: "POST", body: { product } }),
   billingStatus: () => request("/billing/status"),
+  billingConfirm: (sessionId) => request(`/billing/confirm?session_id=${encodeURIComponent(sessionId)}`),
+  billingPortal: (module) => request("/billing/portal", { method: "POST", body: { module } }),
 };
 
 export function saveSession(token, user) {

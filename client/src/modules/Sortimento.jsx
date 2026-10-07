@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Package, Plus, Upload, ArrowLeft, AlertTriangle, Link2, Copy, Check } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
-import { api } from "../lib/api.js";
+import { api, isPlanLocked } from "../lib/api.js";
+import ModuleError from "../components/ModuleError.jsx";
 
 const fmtBRL = (n) => (n == null ? "—" : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 }));
 const fmtPct = (n) => (n == null ? "—" : n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%");
@@ -45,14 +46,17 @@ export default function Sortimento({ goTo }) {
   const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState(null);
+  const [loadError, setLoadError] = useState(null);
 
   async function reload(criterio) {
     try {
       const r = await api.produtosList(criterio);
       setPayload(r);
+      setLoadError(null);
     } catch (e) {
-      setLocked(true);
-      setLockMessage(e.message);
+      // Só é "plano bloqueado" quando o servidor diz isso (402). Qualquer outra falha é erro de carregamento.
+      if (isPlanLocked(e)) { setLocked(true); setLockMessage(e.message); }
+      else setLoadError(e.message);
     }
   }
   useEffect(() => { reload(); }, []);
@@ -78,6 +82,10 @@ export default function Sortimento({ goTo }) {
     }
   }
 
+  if (loadError && !payload) {
+    return <ModuleError title="Gestão de Sortimento" message={loadError} onRetry={() => { setLoadError(null); reload(); }} />;
+  }
+
   if (locked) {
     return (
       <div style={S.moduleCol}>
@@ -86,7 +94,7 @@ export default function Sortimento({ goTo }) {
             <Package size={22} color="#fff" />
           </div>
           <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>Gestão de Sortimento</div>
-          <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>{lockMessage || "Este recurso é exclusivo para assinantes de Vendas, Gestão ou do Pacote Completo."}</p>
+          <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>{lockMessage || "Este recurso faz parte da Gestão de Sortimento — avulsa ou inclusa em Vendas, Gestão e no Pacote Completo."}</p>
           <button style={S.primaryBtn} onClick={() => goTo?.("planos")}>Ver planos</button>
         </div>
       </div>

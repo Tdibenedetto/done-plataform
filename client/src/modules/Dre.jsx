@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Plus, Trash2, Wallet, TrendingUp, TrendingDown, Upload } from "lucide-react";
 import { C, S, FONT_DISPLAY } from "../theme.js";
-import { api, loadSession } from "../lib/api.js";
+import { api, loadSession, isPlanLocked } from "../lib/api.js";
+import ModuleError from "../components/ModuleError.jsx";
 
 const MES_ABBR = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const fmtBRL = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -41,6 +42,7 @@ export default function Dre({ goTo }) {
   const [error, setError] = useState(null);
   const [locked, setLocked] = useState(null); // mensagem de bloqueio, se a org não tem o add-on ativo
   const [granting, setGranting] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   async function reload() {
     const r = await api.dreList();
@@ -48,9 +50,13 @@ export default function Dre({ goTo }) {
     setSaldoInicial(r.saldoInicial);
     setSaldoDraft(String(r.saldoInicial));
   }
-  useEffect(() => {
-    reload().catch((e) => setLocked(e.message));
-  }, []);
+  // Só é "bloqueado" quando o servidor diz que falta o add-on/plano (402) ou que a tela é só do
+  // Master (403). Qualquer outra falha é erro de carregamento, com botão de tentar de novo.
+  function firstLoad() {
+    setLoadError(null);
+    reload().catch((e) => (isPlanLocked(e) || e?.status === 403 ? setLocked(e.message) : setLoadError(e.message)));
+  }
+  useEffect(() => { firstLoad(); }, []);
 
   async function grantTestAccess() {
     setGranting(true);
@@ -171,6 +177,10 @@ export default function Dre({ goTo }) {
       setUploading(false);
       e.target.value = "";
     }
+  }
+
+  if (loadError && entries === null) {
+    return <ModuleError title="DRE Simplificado / Fluxo de Caixa" message={loadError} onRetry={firstLoad} />;
   }
 
   if (locked) {

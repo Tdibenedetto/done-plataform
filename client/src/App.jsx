@@ -36,43 +36,78 @@ class ErrorBoundary extends Component {
   }
 }
 
+// Lê (uma única vez, no carregamento) o retorno do Stripe que vem na URL:
+//  /billing/success?session_id=...&product=...  → pagamento concluído, falta confirmar e liberar
+//  /billing/cancel                              → desistiu no meio do pagamento
+//  /billing/portal-return                       → voltou do "Gerenciar assinatura"
+function readBillingReturn() {
+  const path = window.location.pathname;
+  if (!path.startsWith("/billing/")) return null;
+  const params = new URLSearchParams(window.location.search);
+  const kind = path.startsWith("/billing/success") ? "success" : path.startsWith("/billing/portal-return") ? "portal" : "cancel";
+  return { kind, product: params.get("product"), sessionId: params.get("session_id") };
+}
+
 export default function App() {
   const [session, setSession] = useState(() => loadSession());
-  const [activeModule, setActiveModule] = useState(() => {
-    if (!window.location.pathname.startsWith("/billing/")) return "overview";
-    // Antes disto, QUALQUER retorno do Stripe (Vendas, Gestão, Completo, add-ons)
-    // caía sempre no Comercial Coach. Agora usa o produto comprado (vem na URL de
-    // retorno) para levar a pessoa pra um lugar que faça sentido com o que ela comprou.
-    const product = new URLSearchParams(window.location.search).get("product");
-    return product && product !== "coach" ? "planos" : "coach";
-  });
+  // Qualquer retorno do Stripe cai na tela de Planos, que confirma o pagamento e mostra o resultado.
+  const [billingReturn, setBillingReturn] = useState(() => readBillingReturn());
+  const [activeModule, setActiveModule] = useState(() => (window.location.pathname.startsWith("/billing/") ? "planos" : "overview"));
   const [coachResult, setCoachResult] = useState(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [authNotice, setAuthNotice] = useState(null);
 
-  // Rota pública de convite: /convite/:token
   const path = window.location.pathname;
-  if (path.startsWith("/convite/")) {
-    const token = path.replace("/convite/", "");
-    return <InviteAcceptScreen token={token} onAuth={(t, u) => { saveSession(t, u); setSession({ token: t, user: u }); window.history.replaceState(null, "", "/"); }} />;
-  }
 
-  // Retorno do checkout do Stripe: /billing/success ou /billing/cancel — limpa a URL e volta pro Comercial Coach.
+  // Limpa a URL de retorno do Stripe (o conteúdo já foi guardado em billingReturn).
   useEffect(() => {
     if (window.location.pathname.startsWith("/billing/")) {
       window.history.replaceState(null, "", "/");
     }
   }, []);
 
+  // Sessão vencida (o servidor respondeu 401): volta para o login com um aviso claro,
+  // em vez de deixar as telas mostrando erro ou "plano bloqueado".
+  useEffect(() => {
+    function onExpired() {
+      clearSession();
+      setSession(null);
+      setAuthNotice("Sua sessão expirou. Entre de novo para continuar.");
+    }
+    window.addEventListener("done-session-expired", onExpired);
+    return () => window.removeEventListener("done-session-expired", onExpired);
+  }, []);
+
   useEffect(() => {
     if (session) api.coachLatest().then(setCoachResult).catch(() => setCoachResult(null));
   }, [session]);
 
+  function enter(token, user) {
+    saveSession(token, user);
+    setSession({ token, user });
+    setAuthNotice(null);
+    window.history.replaceState(null, "", "/");
+  }
+
+  // Rota pública de convite: /convite/:token
+  if (path.startsWith("/convite/")) {
+    const token = path.replace("/convite/", "");
+    return <InviteAcceptScreen token={token} onAuth={enter} />;
+  }
+  // Rota pública de "esqueci minha senha": /redefinir-senha/:token (link enviado por e-mail)
+  if (path.startsWith("/redefinir-senha/")) {
+    const token = path.replace("/redefinir-senha/", "").replace(/\/+$/, "");
+    return <ResetPasswordScreen token={token} onAuth={enter} onBackToLogin={() => window.location.assign("/")} />;
+  }
+
   if (!session) {
     return (
       <AuthScreen
+        notice={authNotice}
         onAuth={(token, user, planoToHighlight) => {
           saveSession(token, user);
           setSession({ token, user });
+          setAuthNotice(null);
           if (planoToHighlight) {
             localStorage.setItem("done_highlight_plan", planoToHighlight);
             setActiveModule("planos");
@@ -117,8 +152,8 @@ export default function App() {
           {activeModule === "gestao" && <FerramentaGestao goTo={goTo} />}
           {activeModule === "credito" && <Credito goTo={goTo} />}
           {activeModule === "sortimento" && <Sortimento goTo={goTo} />}
-          {activeModule === "planos" && <Planos />}
-          {activeModule === "suporte" && <Suporte />}
+          {activeModule === "planos" && <Planos goTo={goTo} billingReturn={billingReturn} onBillingReturnHandled={() => setBillingReturn(null)} />}
+          {activeModule === "suporte" && session.user.isPlatformAdmin && <Suporte />}
           {activeModule === "dre" && <Dre goTo={goTo} />}
           {activeModule === "admin" && <AdminOverview />}
         </ErrorBoundary>
@@ -129,8 +164,9 @@ export default function App() {
   );
 }
 
-function AuthScreen({ onAuth }) {
-  const [mode, setMode] = useState("login");
+function AuthScreen({ onAuth, notice }) {
+  const [mode, setMode] = useState("login"); // "login" | "register" | "forgot"
+  const [forgotSent, setForgotSent] = useState(false);
   const [form, setForm] = useState({ name: "", company: "", email: "", password: "" });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -140,9 +176,21 @@ function AuthScreen({ onAuth }) {
   const planoParam = new URLSearchParams(window.location.search).get("plano");
 
   async function submit() {
+    if (busy) return;
+    // Conferência rápida antes de chamar o servidor — evita esperar uma resposta só para ver um erro óbvio.
+    if (!form.email.trim()) return setError("Informe seu e-mail.");
+    if (mode === "register" && !form.name.trim()) return setError("Informe seu nome.");
+    if (mode === "register" && form.password.length < 8) return setError("A senha precisa ter pelo menos 8 caracteres.");
+    if (mode === "login" && !form.password) return setError("Informe sua senha.");
+
     setBusy(true);
     setError(null);
     try {
+      if (mode === "forgot") {
+        await api.forgotPassword(form.email);
+        setForgotSent(true);
+        return;
+      }
       const fn = mode === "login" ? api.login : api.register;
       const { token, user } = await fn(form);
       onAuth(token, user, mode === "register" ? planoParam : null);
@@ -151,6 +199,12 @@ function AuthScreen({ onAuth }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  function switchMode(next) {
+    setMode(next);
+    setError(null);
+    setForgotSent(false);
   }
 
   return (
@@ -183,11 +237,26 @@ function AuthScreen({ onAuth }) {
         <div style={{ background: C.card, padding: "48px 64px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <div style={{ maxWidth: 380, width: "100%", margin: "0 auto" }}>
           <h2 style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 26, margin: "0 0 6px", color: C.ink }}>
-            {mode === "login" ? "Entrar na plataforma" : "Criar sua conta"}
+            {mode === "login" ? "Entrar na plataforma" : mode === "register" ? "Criar sua conta" : "Criar nova senha"}
           </h2>
           <p style={{ fontSize: 13, color: C.inkSoft, marginBottom: 22 }}>
-            {mode === "login" ? "Bem-vindo de volta." : "Leva menos de um minuto."}
+            {mode === "login" ? "Bem-vindo de volta." : mode === "register" ? "Leva menos de um minuto." : "Informe o e-mail da sua conta e enviamos um link para você criar uma senha nova."}
           </p>
+
+          {notice && mode === "login" && (
+            <div style={{ background: C.goldSoft, color: "#8A6423", borderRadius: 8, padding: "10px 12px", fontSize: 12.5, fontWeight: 600, marginBottom: 14 }}>{notice}</div>
+          )}
+
+          {mode === "forgot" && forgotSent ? (
+            <div>
+              <div style={{ background: C.sageSoft, color: C.sage, borderRadius: 10, padding: "14px 16px", fontSize: 13, lineHeight: 1.55 }}>
+                <b>Confira seu e-mail.</b> Se existir uma conta com <b>{form.email.trim()}</b>, o link para criar a nova senha chega em alguns minutos. Ele vale por 1 hora.
+              </div>
+              <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.5, marginTop: 12 }}>Não chegou? Veja a caixa de spam ou confira se digitou o e-mail do cadastro.</p>
+              <button style={{ ...S.primaryBtn, marginTop: 14, width: "100%", justifyContent: "center" }} onClick={() => switchMode("login")}>Voltar para o login</button>
+            </div>
+          ) : (
+          <>
 
           {mode === "register" && (
             <>
@@ -196,25 +265,38 @@ function AuthScreen({ onAuth }) {
             </>
           )}
           <input style={{ ...S.input, marginTop: mode === "register" ? 10 : 0 }} placeholder="E-mail" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} onKeyDown={(e) => e.key === "Enter" && submit()} />
+          {mode !== "forgot" && (
           <div style={{ position: "relative", marginTop: 10 }}>
-            <input style={{ ...S.input, paddingRight: 40 }} placeholder="Senha" type={showPw ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} onKeyDown={(e) => e.key === "Enter" && submit()} />
+            <input style={{ ...S.input, paddingRight: 40 }} placeholder={mode === "register" ? "Crie uma senha (mínimo 8 caracteres)" : "Senha"} type={showPw ? "text" : "password"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} onKeyDown={(e) => e.key === "Enter" && submit()} />
             <button type="button" onClick={() => setShowPw((s) => !s)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: C.muted, cursor: "pointer", display: "flex" }}>
               {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
+          )}
+
+          {mode === "login" && (
+            <button
+              style={{ background: "none", border: "none", color: C.inkSoft, fontSize: 12, marginTop: 8, cursor: "pointer", textDecoration: "underline", padding: 0 }}
+              onClick={() => switchMode("forgot")}
+            >
+              Esqueci minha senha
+            </button>
+          )}
 
           {error && <div style={{ color: C.danger, fontSize: 12.5, marginTop: 10 }}>{error}</div>}
 
           <button style={{ ...S.primaryBtn, marginTop: 18, width: "100%", justifyContent: "center", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={submit}>
-            {busy ? "Aguarde..." : mode === "login" ? "Entrar →" : "Criar conta →"}
+            {busy ? "Aguarde..." : mode === "login" ? "Entrar →" : mode === "register" ? "Criar conta →" : "Enviar link por e-mail →"}
           </button>
 
           <button
             style={{ background: "none", border: "none", color: C.inkSoft, fontSize: 12.5, marginTop: 16, cursor: "pointer", textDecoration: "underline", display: "block" }}
-            onClick={() => setMode(mode === "login" ? "register" : "login")}
+            onClick={() => switchMode(mode === "login" ? "register" : "login")}
           >
-            {mode === "login" ? "Não tem conta? Criar uma agora" : "Já tem conta? Entrar"}
+            {mode === "login" ? "Não tem conta? Criar uma agora" : mode === "register" ? "Já tem conta? Entrar" : "Voltar para o login"}
           </button>
+          </>
+          )}
 
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 24, paddingTop: 20, borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.muted }}>
             <ShieldCheck size={13} /> Ambiente seguro e seus dados protegidos
@@ -273,6 +355,69 @@ function RadialGraphic() {
   );
 }
 
+// Tela aberta pelo link do e-mail de "esqueci minha senha".
+function ResetPasswordScreen({ token, onAuth, onBackToLogin }) {
+  const [info, setInfo] = useState(null); // null = conferindo o link | false = link inválido | { email }
+  const [invalidMsg, setInvalidMsg] = useState(null);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.resetInfo(token).then(setInfo).catch((e) => { setInvalidMsg(e.message); setInfo(false); });
+  }, [token]);
+
+  async function submit() {
+    if (busy) return;
+    if (password.length < 8) return setError("A senha precisa ter pelo menos 8 caracteres.");
+    if (password !== confirm) return setError("As duas senhas não estão iguais.");
+    setBusy(true);
+    setError(null);
+    try {
+      const { token: t, user } = await api.resetPassword(token, password);
+      onAuth(t, user);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ ...S.app, alignItems: "center", justifyContent: "center" }}>
+      <style>{FONT_IMPORT}</style>
+      <div style={{ maxWidth: 380, width: "100%", padding: 32 }}>
+        <div style={S.wordmark}>D.O.N.E</div>
+        {info === null && <p style={{ ...S.lead, marginTop: 16 }}>Conferindo o link...</p>}
+        {info === false && (
+          <>
+            <h1 style={{ ...S.h1, fontSize: 24, marginTop: 16 }}>Link inválido ou vencido</h1>
+            <p style={{ ...S.lead, marginBottom: 22 }}>{invalidMsg || "Este link de redefinição não vale mais."} O link funciona uma única vez e por 1 hora.</p>
+            <button style={{ ...S.primaryBtn, width: "100%", justifyContent: "center" }} onClick={onBackToLogin}>Voltar para o login</button>
+          </>
+        )}
+        {info && (
+          <>
+            <h1 style={{ ...S.h1, fontSize: 24, marginTop: 16 }}>Criar nova senha</h1>
+            <p style={{ ...S.lead, marginBottom: 22 }}>Para a conta {info.email}.</p>
+            <input style={S.input} placeholder="Nova senha (mínimo 8 caracteres)" type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+            <input style={{ ...S.input, marginTop: 10 }} placeholder="Repita a nova senha" type={showPw ? "text" : "password"} value={confirm} onChange={(e) => setConfirm(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.inkSoft, marginTop: 10, cursor: "pointer" }}>
+              <input type="checkbox" checked={showPw} onChange={(e) => setShowPw(e.target.checked)} /> Mostrar a senha
+            </label>
+            {error && <div style={{ color: C.danger, fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+            <button style={{ ...S.primaryBtn, marginTop: 16, width: "100%", justifyContent: "center", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={submit}>
+              {busy ? "Aguarde..." : "Salvar e entrar →"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function InviteAcceptScreen({ token, onAuth }) {
   const [info, setInfo] = useState(null);
   const [form, setForm] = useState({ name: "", password: "" });
@@ -318,7 +463,7 @@ function InviteAcceptScreen({ token, onAuth }) {
         <h1 style={{ ...S.h1, fontSize: 24, marginTop: 16 }}>Bem-vindo à {info.orgName}</h1>
         <p style={{ ...S.lead, marginBottom: 22 }}>Você foi convidado como vendedor. Crie sua senha para {info.email}.</p>
         <input style={S.input} placeholder="Seu nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <input style={{ ...S.input, marginTop: 10 }} placeholder="Crie uma senha" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+        <input style={{ ...S.input, marginTop: 10 }} placeholder="Crie uma senha (mínimo 8 caracteres)" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
         {error && <div style={{ color: C.danger, fontSize: 12.5, marginTop: 10 }}>{error}</div>}
         <button style={{ ...S.primaryBtn, marginTop: 16, width: "100%", justifyContent: "center", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={submit}>
           {busy ? "Aguarde..." : "Entrar na equipe →"}
@@ -379,7 +524,8 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
     ...(isMaster ? [{ key: "sortimento", label: "Gestão de Sortimento", icon: Package }] : []),
     ...(isMaster ? [{ key: "dre", label: "DRE / Fluxo de Caixa", icon: Wallet }] : []),
     { key: "planos", label: "Planos", icon: Tag },
-    ...(isMaster ? [{ key: "suporte", label: "Suporte", icon: LifeBuoy }] : []),
+    // Caixa de entrada do suporte: só o time D.O.N.E (Admin Geral) atende. Clientes falam pelo chat.
+    ...(profile.isPlatformAdmin ? [{ key: "suporte", label: "Suporte", icon: LifeBuoy }] : []),
     ...(profile.isPlatformAdmin ? [{ key: "admin", label: "Admin Geral", icon: Building2 }] : []),
   ];
 

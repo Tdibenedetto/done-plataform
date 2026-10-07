@@ -75,11 +75,17 @@ function parseFromAddress(raw) {
   return { email: raw.trim() };
 }
 
+// Nomes de empresa/pessoa e mensagens são texto livre digitado por usuários — sempre escapados
+// antes de entrar no HTML do e-mail.
+function escHtml(v) {
+  return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 export async function sendInviteEmail({ to, orgName, inviterName, token }) {
   const link = `${CLIENT_URL}/convite/${token}`;
   const html = `
     <p>Olá,</p>
-    <p><strong>${inviterName}</strong> te convidou para fazer parte do time de <strong>${orgName}</strong> na plataforma D.O.N.E.</p>
+    <p><strong>${escHtml(inviterName)}</strong> te convidou para fazer parte do time de <strong>${escHtml(orgName)}</strong> na plataforma D.O.N.E.</p>
     <p><a href="${link}">Clique aqui para criar sua conta</a></p>
     <p>Se o link não funcionar, copie e cole este endereço no navegador:<br>${link}</p>
   `;
@@ -143,4 +149,51 @@ export async function sendWeeklyReport({ to, orgName, data }) {
   </div>`;
 
   return sendEmail({ to, subject: `D.O.N.E — Resumo semanal de ${orgName}`, html });
+}
+
+/**
+ * "Esqueci minha senha" — link de uso único, válido por 1 hora, que abre a tela de nova senha.
+ */
+export async function sendPasswordResetEmail({ to, name, token }) {
+  const link = `${CLIENT_URL}/redefinir-senha/${token}`;
+  const html = `
+  <div style="font-family:Arial,sans-serif; max-width:560px; margin:0 auto; background:#fff;">
+    <div style="background:${INK}; padding:20px 24px;">
+      <div style="color:${GOLD}; font-family:Georgia,serif; font-weight:700; font-size:20px; letter-spacing:1px;">D.O.N.E</div>
+      <div style="color:#8A8F9C; font-size:11px; letter-spacing:2px; margin-top:2px;">REDEFINIÇÃO DE SENHA</div>
+    </div>
+    <div style="padding:24px;">
+      <p style="font-size:14px; color:${INK}; line-height:1.5;">Olá${name ? `, ${escHtml(name)}` : ""}.</p>
+      <p style="font-size:14px; color:${INK}; line-height:1.5;">Recebemos um pedido para criar uma nova senha para a sua conta na plataforma D.O.N.E.</p>
+      <a href="${link}" style="display:inline-block; background:${INK}; color:${GOLD}; text-decoration:none; padding:11px 22px; border-radius:8px; font-size:14px; font-weight:600; margin:8px 0;">Criar nova senha →</a>
+      <p style="font-size:12px; color:${MUTED}; line-height:1.5;">O link vale por 1 hora e só pode ser usado uma vez. Se o botão não funcionar, copie e cole este endereço no navegador:<br>${link}</p>
+      <p style="font-size:12px; color:${MUTED}; line-height:1.5; margin-top:20px; border-top:1px solid ${BORDER}; padding-top:14px;">Se você não pediu isso, pode ignorar este e-mail — sua senha continua a mesma.</p>
+    </div>
+  </div>`;
+  const result = await sendEmail({ to, subject: "D.O.N.E — Criar nova senha", html });
+  return { ...result, link };
+}
+
+/**
+ * Avisa o time da D.O.N.E (Admin Geral) de que um cliente pediu atendimento humano no chat
+ * ou voltou a escrever numa conversa já em atendimento.
+ */
+export async function sendSupportAlertEmail({ to, userName, userEmail, orgName, lastMessage, isFollowUp }) {
+  const html = `
+  <div style="font-family:Arial,sans-serif; max-width:560px; margin:0 auto; background:#fff;">
+    <div style="background:${INK}; padding:20px 24px;">
+      <div style="color:${GOLD}; font-family:Georgia,serif; font-weight:700; font-size:20px; letter-spacing:1px;">D.O.N.E</div>
+      <div style="color:#8A8F9C; font-size:11px; letter-spacing:2px; margin-top:2px;">SUPORTE — ${isFollowUp ? "NOVA MENSAGEM" : "PEDIDO DE ATENDIMENTO"}</div>
+    </div>
+    <div style="padding:24px;">
+      <p style="font-size:14px; color:${INK}; line-height:1.5;">
+        <strong>${escHtml(userName || "Um usuário")}</strong>${userEmail ? ` (${escHtml(userEmail)})` : ""}, da empresa <strong>${escHtml(orgName || "—")}</strong>,
+        ${isFollowUp ? "enviou uma nova mensagem na conversa de suporte." : "pediu para falar com alguém do time de suporte."}
+      </p>
+      ${lastMessage ? `<div style="background:${PAPER}; border:1px solid ${BORDER}; border-radius:10px; padding:14px 16px; font-size:13.5px; color:${INK}; line-height:1.5;">${escHtml(lastMessage)}</div>` : ""}
+      <a href="${CLIENT_URL}" style="display:inline-block; background:${INK}; color:${GOLD}; text-decoration:none; padding:10px 20px; border-radius:8px; font-size:13px; font-weight:600; margin-top:16px;">Responder na plataforma →</a>
+      <p style="font-size:11px; color:${MUTED}; margin-top:20px;">Abra o menu "Suporte" para ver a conversa inteira e responder.</p>
+    </div>
+  </div>`;
+  return sendEmail({ to, subject: `D.O.N.E Suporte — ${orgName || "cliente"}: ${isFollowUp ? "nova mensagem" : "pedido de atendimento"}`, html });
 }

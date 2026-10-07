@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { prisma } from "../lib/prisma.js";
 import { requireMaster, requirePlatformAdmin } from "../middleware/auth.js";
 import { sendInviteEmail } from "../lib/mailer.js";
-import { MAX_TEAM_SIZE } from "./auth.js";
+import { MAX_TEAM_SIZE, normalizeEmail } from "./auth.js";
 import { runFollowUpCheck } from "../jobs/followUp.js";
 import { runWeeklyReportCheck } from "../jobs/weeklyReport.js";
 
@@ -104,7 +104,7 @@ router.post("/weekly-report-test", requireMaster, async (req, res) => {
 
 // Apenas o Master convida novos membros.
 router.post("/invite", requireMaster, async (req, res) => {
-  const { email } = req.body;
+  const email = normalizeEmail(req.body.email);
   if (!email) return res.status(400).json({ error: "E-mail é obrigatório." });
 
   const [userCount, pendingCount, existingUser] = await Promise.all([

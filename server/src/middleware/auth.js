@@ -47,7 +47,18 @@ export function requirePlan(allowedModules) {
       where: { organizationId: req.organizationId, status: { in: ["active", "trialing"] }, module: { in: allowedModules } },
     });
     if (!sub) {
-      const labels = { vendas: "Ferramenta de Vendas", gestao: "Ferramenta de Gestão", completo: "Pacote Completo" };
+      // Cartão recusado: o Stripe deixa a assinatura como "past_due" enquanto tenta cobrar de novo.
+      // O acesso fica suspenso, mas o cliente precisa saber POR QUÊ — não é "você não é assinante".
+      const pending = await prisma.subscription.findFirst({
+        where: { organizationId: req.organizationId, status: { in: ["past_due", "unpaid"] }, module: { in: allowedModules } },
+      });
+      if (pending) {
+        return res.status(402).json({
+          code: "payment_pending",
+          error: "Não conseguimos cobrar a sua assinatura. Atualize o cartão em Planos → Gerenciar assinatura para liberar o acesso de novo.",
+        });
+      }
+      const labels = { vendas: "Ferramenta de Vendas", gestao: "Ferramenta de Gestão", completo: "Pacote Completo", credito: "Análise de Crédito", sortimento: "Gestão de Sortimento" };
       return res.status(402).json({ error: `Este recurso é exclusivo para assinantes de ${allowedModules.map((m) => labels[m] || m).join(", ")}.` });
     }
     next();
