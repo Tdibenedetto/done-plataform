@@ -179,14 +179,22 @@ router.post("/:id/balanco", uploadDocs, async (req, res) => {
     return res.status(400).json({ error: "Não conseguimos ler os números desse arquivo. Confirme se é um Balanço Patrimonial ou DRE em PDF com texto legível (não uma foto) e tente de novo." });
   }
 
-  // Junta com o que já tinha sido lido antes nesta análise: enviar o Balanço hoje e a DRE depois
-  // completa a análise, em vez de apagar o que foi lido no primeiro envio.
-  const CAMPOS = ["receita", "lucroLiquido", "mesesPeriodo", "ativoCirculante", "passivoCirculante", "passivoNaoCirculante", "patrimonioLiquido", "ativoTotal"];
+  // Junta com o que já tinha sido lido antes nesta análise, por BLOCO de documento:
+  //  - enviar o Balanço hoje e a DRE depois completa a análise (um não apaga o outro);
+  //  - enviar uma DRE ou um Balanço NOVO (de outro período) substitui o bloco inteiro dele,
+  //    para não misturar números de períodos diferentes. Assim o limite é recalculado com
+  //    os dados mais recentes sempre que chegam documentos novos.
+  const BLOCO_DRE = ["receita", "lucroLiquido", "mesesPeriodo"];
+  const BLOCO_BALANCO = ["ativoCirculante", "passivoCirculante", "passivoNaoCirculante", "patrimonioLiquido", "ativoTotal"];
   const f = {};
-  for (const c of CAMPOS) f[c] = analysis.hasFinancials ? num(analysis[c]) : null;
+  for (const c of [...BLOCO_DRE, ...BLOCO_BALANCO]) f[c] = analysis.hasFinancials ? num(analysis[c]) : null;
   for (const lido of lidos) {
     if (!lido) continue;
-    for (const c of CAMPOS) if (lido[c] !== null) f[c] = lido[c];
+    for (const bloco of [BLOCO_DRE, BLOCO_BALANCO]) {
+      if (bloco.some((c) => lido[c] !== null && c !== "mesesPeriodo")) {
+        for (const c of bloco) f[c] = lido[c];
+      }
+    }
   }
 
   const resultado = avaliarCredito(f);

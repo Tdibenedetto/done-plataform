@@ -281,23 +281,6 @@ export default function Credito({ goTo }) {
             <button style={{ ...S.ghostBtn, marginTop: 14, fontSize: 11.5 }} onClick={() => { setCurrent(null); setError(null); }}>← Nova consulta</button>
           </div>
 
-          {/* Upload sempre disponível: o Balanço e a DRE costumam vir em PDFs separados, e o segundo
-              envio completa o primeiro (antes o botão sumia depois do primeiro arquivo). */}
-          {(!current.hasFinancials || current.status === "incompleto" || !current.status) && (
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
-              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15 }}>Análise Avançada (opcional)</div>
-              <p style={{ fontSize: 12.5, color: C.inkSoft, margin: 0 }}>
-                Envie o <b>Balanço Patrimonial</b> e a <b>DRE</b> do cliente em PDF para receber uma sugestão de limite de crédito. Pode selecionar os dois arquivos de uma vez.
-              </p>
-              <label style={{ ...S.primaryBtnSm, cursor: uploadingBalanco ? "default" : "pointer", opacity: uploadingBalanco ? 0.6 : 1 }}>
-                <Upload size={13} /> {uploadingBalanco ? "Lendo os documentos..." : current.status === "incompleto" ? "Enviar o documento que falta (PDF)" : "Enviar Balanço e DRE (PDF)"}
-                <input type="file" accept="application/pdf" multiple onChange={handleBalanco} style={{ display: "none" }} disabled={uploadingBalanco} />
-              </label>
-              {uploadingBalanco && <div style={{ fontSize: 11.5, color: C.muted }}>A leitura por IA leva de 10 a 30 segundos por documento.</div>}
-              {error && <div style={{ color: C.danger, fontSize: 12 }}>{error}</div>}
-            </div>
-          )}
-
           {current.hasFinancials && current.status && (() => {
             const ok = current.status === "aprovado";
             const pend = current.status === "incompleto";
@@ -336,6 +319,28 @@ export default function Credito({ goTo }) {
                   </div>
                 )}
               </div>
+            );
+          })()}
+
+          {/* Upload SEMPRE disponível: aceita vários PDFs de uma vez (Balanço e DRE) e, depois de uma
+              análise pronta, novos documentos recalculam o limite com os dados mais recentes. */}
+          {(() => {
+            const pronta = current.hasFinancials && current.status && current.status !== "incompleto";
+            return (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
+              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15 }}>{pronta ? "Atualizar a análise" : "Análise Avançada (opcional)"}</div>
+              <p style={{ fontSize: 12.5, color: C.inkSoft, margin: 0 }}>
+                {pronta
+                  ? <>Chegou um Balanço ou uma DRE mais recente? Envie aqui: os números novos substituem os antigos do mesmo documento e o limite sugerido é recalculado.</>
+                  : <>Envie o <b>Balanço Patrimonial</b> e a <b>DRE</b> do cliente em PDF para receber uma sugestão de limite de crédito. Pode selecionar vários arquivos de uma vez.</>}
+              </p>
+              <label style={{ ...(pronta ? S.ghostBtn : S.primaryBtnSm), display: "inline-flex", alignItems: "center", gap: 6, cursor: uploadingBalanco ? "default" : "pointer", opacity: uploadingBalanco ? 0.6 : 1 }}>
+                <Upload size={13} /> {uploadingBalanco ? "Lendo os documentos..." : pronta ? "Enviar documentos novos (PDF)" : current.status === "incompleto" ? "Enviar o documento que falta (PDF)" : "Enviar Balanço e DRE (PDF)"}
+                <input type="file" accept="application/pdf" multiple onChange={handleBalanco} style={{ display: "none" }} disabled={uploadingBalanco} />
+              </label>
+              {uploadingBalanco && <div style={{ fontSize: 11.5, color: C.muted }}>A leitura por IA leva de 10 a 30 segundos por documento.</div>}
+              {error && <div style={{ color: C.danger, fontSize: 12 }}>{error}</div>}
+            </div>
             );
           })()}
         </div>
