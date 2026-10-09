@@ -147,9 +147,10 @@ Object.assign(api, {
   gruposSetLimite: (id, novoLimite) => request(`/grupos/${id}/limite`, { method: "PUT", body: { novoLimite } }),
   gruposDelete: (id) => request(`/grupos/${id}`, { method: "DELETE" }),
   clientesSetFaturamentoAnterior: (id, valor) => request(`/clientes/${id}/faturamento-anterior`, { method: "PUT", body: { valor } }),
-  creditoBalanco: (id, file) => {
+  // Aceita um arquivo ou vários (Balanço e DRE juntos).
+  creditoBalanco: (id, files) => {
     const form = new FormData();
-    form.append("file", file);
+    for (const f of Array.isArray(files) ? files : [files]) form.append("files", f);
     return request(`/credito/${id}/balanco`, { method: "POST", body: form, isForm: true });
   },
   creditoSetMonitoring: (id, monitoring) => request(`/credito/${id}/monitoring`, { method: "PATCH", body: { monitoring } }),
