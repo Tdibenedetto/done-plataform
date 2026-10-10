@@ -311,25 +311,32 @@ const DIMENSION_LABEL_PT = {
 export async function extractFinancials(pdfBase64) {
   if (!client) return null;
 
-  const prompt = `Você extrai números financeiros de um balanço patrimonial e/ou DRE (Demonstração de Resultado).
+  // Atenção ao padrão brasileiro: no Balanço, a linha "TOTAL DO PASSIVO" costuma INCLUIR o
+  // patrimônio líquido (é igual ao total do ativo). Usar esse número como "dívida" fazia toda
+  // empresa parecer 100% endividada e ser reprovada. Por isso pedimos as partes separadas.
+  const prompt = `Você extrai números de demonstrações contábeis brasileiras: Balanço Patrimonial e/ou DRE (Demonstração do Resultado). O documento pode conter só um dos dois.
 
-Encontre e retorne, em reais (número, sem formatação, sem R$, sem separador de milhar):
-- receita: receita/faturamento total do período
-- lucroLiquido: lucro líquido do período (pode ser negativo)
-- ativoCirculante: total do ativo circulante
-- passivoCirculante: total do passivo circulante
-- ativoTotal: total do ativo
-- passivoTotal: total do passivo (ou passivo total = ativo total - patrimônio líquido, se só houver patrimônio líquido)
+Retorne, em reais (número puro, sem R$, sem separador de milhar, ponto como decimal; despesas e prejuízos com sinal negativo só quando o próprio valor for negativo no resultado):
+- receita: RECEITA LÍQUIDA do período (receita operacional líquida). Se não houver receita líquida, use a receita bruta. Só existe na DRE.
+- lucroLiquido: resultado/lucro líquido do período (negativo se for prejuízo). Só existe na DRE.
+- mesesPeriodo: quantos meses o resultado da DRE cobre, SOMENTE se o documento disser explicitamente (ex: "período de 01/01 a 30/06" = 6; "exercício de 2025" = 12). Se não estiver explícito, null.
+- ativoCirculante: TOTAL do ativo circulante.
+- passivoCirculante: TOTAL do passivo circulante.
+- passivoNaoCirculante: TOTAL do passivo não circulante (exigível a longo prazo). Se a seção existir sem total, some os itens dela.
+- patrimonioLiquido: TOTAL do patrimônio líquido.
+- ativoTotal: TOTAL do ativo.
+
+NUNCA use a linha "Total do Passivo" que inclui o patrimônio líquido no lugar de passivoCirculante ou passivoNaoCirculante.
 
 Responda APENAS com um JSON, sem markdown, sem texto antes ou depois:
-{"receita": 0, "lucroLiquido": 0, "ativoCirculante": 0, "passivoCirculante": 0, "ativoTotal": 0, "passivoTotal": 0}
+{"receita": null, "lucroLiquido": null, "mesesPeriodo": null, "ativoCirculante": null, "passivoCirculante": null, "passivoNaoCirculante": null, "patrimonioLiquido": null, "ativoTotal": null}
 
-Use null para qualquer valor que não conseguir encontrar no documento. Não invente números.`;
+Use null para qualquer valor que não estiver no documento. Não invente números.`;
 
   try {
     const res = await client.messages.create({
       model: "claude-sonnet-5",
-      max_tokens: 500,
+      max_tokens: 600,
       messages: [{
         role: "user",
         content: [
@@ -339,10 +346,13 @@ Use null para qualquer valor que não conseguir encontrar no documento. Não inv
       }],
     });
     const text = res.content.find((b) => b.type === "text")?.text || "";
-    const clean = text.replace(/```json|```/g, "").trim();
+    let clean = text.replace(/```json|```/g, "").trim();
+    const first = clean.indexOf("{");
+    const last = clean.lastIndexOf("}");
+    if (first >= 0 && last > first) clean = clean.slice(first, last + 1);
     return JSON.parse(clean);
   } catch (e) {
-    console.error("[claude] falha ao extrair balanço:", e.message);
+    console.error("[claude] falha ao extrair balanço/DRE:", e.message);
     return null;
   }
 }

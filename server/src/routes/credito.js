@@ -8,22 +8,63 @@ import { findOrCreateCliente } from "../lib/clientes.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+// Balanço e DRE costumam vir em PDFs separados: aceita os dois de uma vez ("files") e mantém
+// o campo antigo ("file") para quem envia um por vez.
+const uploadDocs = upload.fields([{ name: "file", maxCount: 1 }, { name: "files", maxCount: 4 }]);
 
 // Vendável sozinho (módulo "credito") ou incluso em Vendas, Gestão ou Completo.
 router.use(requirePlan(["vendas", "gestao", "completo", "credito"]));
 
 // -------- Regras de crédito (transparentes, ajustáveis — não é birô oficial) --------
+const num = (v) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+
+// Normaliza o que a IA leu de UM documento.
+function normalizarExtracao(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const f = {
+    receita: num(raw.receita),
+    lucroLiquido: num(raw.lucroLiquido),
+    mesesPeriodo: num(raw.mesesPeriodo),
+    ativoCirculante: num(raw.ativoCirculante),
+    passivoCirculante: num(raw.passivoCirculante),
+    passivoNaoCirculante: num(raw.passivoNaoCirculante),
+    patrimonioLiquido: num(raw.patrimonioLiquido),
+    ativoTotal: num(raw.ativoTotal),
+  };
+  if (f.mesesPeriodo !== null && (f.mesesPeriodo < 1 || f.mesesPeriodo > 24)) f.mesesPeriodo = null;
+  if (f.mesesPeriodo !== null) f.mesesPeriodo = Math.round(f.mesesPeriodo);
+  return Object.values(f).some((v) => v !== null) ? f : null;
+}
+
+// Passivo EXIGÍVEL = o que a empresa deve (circulante + não circulante), sem o patrimônio líquido.
+// No balanço brasileiro, "Total do Passivo" = Total do Ativo (inclui o PL) — usar esse número
+// fazia o endividamento dar 100% e reprovar qualquer empresa.
+function passivoExigivel(f) {
+  if (f.passivoCirculante !== null && f.passivoNaoCirculante !== null) return f.passivoCirculante + f.passivoNaoCirculante;
+  if (f.ativoTotal !== null && f.patrimonioLiquido !== null) return f.ativoTotal - f.patrimonioLiquido;
+  if (f.passivoCirculante !== null) return f.passivoCirculante; // sem não circulante informado: o mínimo conhecido
+  return null;
+}
+
 function avaliarCredito(f) {
-  if (!f || f.receita == null || f.ativoCirculante == null || f.passivoCirculante == null) {
-    return { status: "reprovado", limiteSugerido: null, motivoRecusa: "Não foi possível extrair os dados financeiros necessários do documento enviado." };
+  const faltaDre = f.receita === null;
+  const faltaBalanco = f.ativoCirculante === null || f.passivoCirculante === null;
+  if (faltaDre || faltaBalanco) {
+    const faltas = [];
+    if (faltaBalanco) faltas.push("o Balanço Patrimonial (ativo e passivo circulante)");
+    if (faltaDre) faltas.push("a DRE (receita e lucro do período)");
+    return {
+      status: "incompleto",
+      limiteSugerido: null,
+      motivoRecusa: `Documento lido, mas falta ${faltas.join(" e ")} para calcular o limite. Envie ${faltas.length > 1 ? "os documentos" : "o documento"} que falta${faltas.length > 1 ? "m" : ""}.`,
+    };
   }
 
+  const exigivel = passivoExigivel(f);
   const liquidezCorrente = f.passivoCirculante > 0 ? f.ativoCirculante / f.passivoCirculante : null;
-  const endividamento = f.ativoTotal > 0 ? (f.passivoTotal ?? 0) / f.ativoTotal : null;
-  // Lucro líquido ausente do documento (comum quando só o Balanço Patrimonial é enviado, sem
-  // o DRE) fica de fora da conta — null, não 0. Tratar "não sei" como "zero" faria a margem
-  // parecer negativa e reprovar a empresa por falta de dado, não por resultado ruim de verdade.
-  const margemLiquida = (f.receita > 0 && f.lucroLiquido != null) ? f.lucroLiquido / f.receita : null;
+  const endividamento = f.ativoTotal > 0 && exigivel !== null ? exigivel / f.ativoTotal : null;
+  // Lucro líquido ausente fica de fora da conta — null, não 0 (ausência de dado não é prejuízo).
+  const margemLiquida = (f.receita > 0 && f.lucroLiquido !== null) ? f.lucroLiquido / f.receita : null;
 
   const motivos = [];
   if (liquidezCorrente !== null && liquidezCorrente < 1.0) motivos.push(`liquidez corrente baixa (${liquidezCorrente.toFixed(2)})`);
@@ -39,7 +80,9 @@ function avaliarCredito(f) {
   }
 
   // Aprovado: limite base = 15% da receita mensal média, ajustado pela qualidade dos indicadores.
-  const receitaMensal = f.receita / 12;
+  // Receita mensal = receita ÷ meses do período da DRE (12 quando o documento não informa — o
+  // lado conservador: numa DRE semestral, isso subestima o limite, nunca o superestima).
+  const receitaMensal = f.receita / (f.mesesPeriodo || 12);
   const fatorLiquidez = liquidezCorrente ? Math.min(1.5, Math.max(0.6, liquidezCorrente / 1.5)) : 1;
   const fatorMargem = margemLiquida ? Math.min(1.3, Math.max(0.7, 1 + margemLiquida)) : 1;
   const limite = Math.round((receitaMensal * 0.15 * fatorLiquidez * fatorMargem) / 100) * 100;
@@ -121,26 +164,49 @@ router.post("/cnpj", async (req, res) => {
   res.json({ ...record, raw: data });
 });
 
-router.post("/:id/balanco", upload.single("file"), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado." });
+router.post("/:id/balanco", uploadDocs, async (req, res) => {
+  const files = [...(req.files?.file || []), ...(req.files?.files || [])];
+  if (files.length === 0) return res.status(400).json({ error: "Nenhum arquivo enviado." });
+  const naoPdf = files.find((f) => f.buffer.subarray(0, 5).toString("latin1") !== "%PDF-");
+  if (naoPdf) return res.status(400).json({ error: `"${naoPdf.originalname}" não é um PDF. Envie o Balanço e a DRE em PDF.` });
 
   const analysis = await prisma.creditAnalysis.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
   if (!analysis) return res.status(404).json({ error: "Análise não encontrada." });
 
-  const financials = await extractFinancials(req.file.buffer.toString("base64"));
-  if (!financials) {
-    return res.status(400).json({ error: "Não conseguimos ler os dados financeiros desse arquivo. Confirme se é um balanço/DRE legível." });
+  // Lê cada PDF separadamente (em paralelo) — um documento pode ter só o Balanço, outro só a DRE.
+  const lidos = (await Promise.all(files.map((f) => extractFinancials(f.buffer.toString("base64"))))).map(normalizarExtracao);
+  if (lidos.every((l) => l === null)) {
+    return res.status(400).json({ error: "Não conseguimos ler os números desse arquivo. Confirme se é um Balanço Patrimonial ou DRE em PDF com texto legível (não uma foto) e tente de novo." });
   }
 
-  const resultado = avaliarCredito(financials);
+  // Junta com o que já tinha sido lido antes nesta análise, por BLOCO de documento:
+  //  - enviar o Balanço hoje e a DRE depois completa a análise (um não apaga o outro);
+  //  - enviar uma DRE ou um Balanço NOVO (de outro período) substitui o bloco inteiro dele,
+  //    para não misturar números de períodos diferentes. Assim o limite é recalculado com
+  //    os dados mais recentes sempre que chegam documentos novos.
+  const BLOCO_DRE = ["receita", "lucroLiquido", "mesesPeriodo"];
+  const BLOCO_BALANCO = ["ativoCirculante", "passivoCirculante", "passivoNaoCirculante", "patrimonioLiquido", "ativoTotal"];
+  const f = {};
+  for (const c of [...BLOCO_DRE, ...BLOCO_BALANCO]) f[c] = analysis.hasFinancials ? num(analysis[c]) : null;
+  for (const lido of lidos) {
+    if (!lido) continue;
+    for (const bloco of [BLOCO_DRE, BLOCO_BALANCO]) {
+      if (bloco.some((c) => lido[c] !== null && c !== "mesesPeriodo")) {
+        for (const c of bloco) f[c] = lido[c];
+      }
+    }
+  }
+
+  const resultado = avaliarCredito(f);
 
   const updated = await prisma.creditAnalysis.update({
     where: { id: analysis.id },
     data: {
       hasFinancials: true,
-      receita: financials.receita, lucroLiquido: financials.lucroLiquido,
-      ativoCirculante: financials.ativoCirculante, passivoCirculante: financials.passivoCirculante,
-      ativoTotal: financials.ativoTotal, passivoTotal: financials.passivoTotal,
+      receita: f.receita, lucroLiquido: f.lucroLiquido, mesesPeriodo: f.mesesPeriodo,
+      ativoCirculante: f.ativoCirculante, passivoCirculante: f.passivoCirculante,
+      passivoNaoCirculante: f.passivoNaoCirculante, patrimonioLiquido: f.patrimonioLiquido,
+      ativoTotal: f.ativoTotal, passivoTotal: passivoExigivel(f),
       status: resultado.status, limiteSugerido: resultado.limiteSugerido, motivoRecusa: resultado.motivoRecusa,
     },
   });

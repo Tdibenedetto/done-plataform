@@ -316,9 +316,12 @@ model CreditAnalysis {
   ativoCirculante   Float?
   passivoCirculante Float?
   ativoTotal        Float?
-  passivoTotal      Float?
+  passivoTotal      Float?   // passivo EXIGÍVEL (circulante + não circulante) — sem o patrimônio líquido
+  passivoNaoCirculante Float?
+  patrimonioLiquido Float?
+  mesesPeriodo      Int?     // meses cobertos pela DRE (ex: 6 num semestre); vazio = não informado no documento
 
-  status         String? // "aprovado" | "reprovado"
+  status         String? // "aprovado" | "reprovado" | "incompleto" (falta Balanço ou DRE)
   limiteSugerido Float?
   motivoRecusa   String?
 

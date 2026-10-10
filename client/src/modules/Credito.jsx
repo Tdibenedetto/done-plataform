@@ -107,12 +107,13 @@ export default function Credito({ goTo }) {
   }
 
   async function handleBalanco(e) {
-    const file = e.target.files[0];
-    if (!file || !current) return;
+    const files = Array.from(e.target.files || []);
+    e.target.value = ""; // permite escolher o mesmo arquivo de novo depois
+    if (!files.length || !current) return;
     setUploadingBalanco(true);
     setError(null);
     try {
-      const result = await api.creditoBalanco(current.id, file);
+      const result = await api.creditoBalanco(current.id, files);
       setCurrent(result);
       reload();
     } catch (err) {
@@ -204,8 +205,8 @@ export default function Credito({ goTo }) {
                     <div style={{ fontSize: 11, color: C.muted }}>{h.requestedBy?.name} · {new Date(h.createdAt).toLocaleDateString("pt-BR")}</div>
                   </div>
                   {h.status && (
-                    <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 999, background: h.status === "aprovado" ? C.sageSoft : C.dangerSoft, color: h.status === "aprovado" ? C.sage : C.danger, flexShrink: 0 }}>
-                      {h.status === "aprovado" ? "Aprovado" : "Reprovado"}
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 999, background: h.status === "aprovado" ? C.sageSoft : h.status === "incompleto" ? C.goldSoft : C.dangerSoft, color: h.status === "aprovado" ? C.sage : h.status === "incompleto" ? "#8A6423" : C.danger, flexShrink: 0 }}>
+                      {h.status === "aprovado" ? "Aprovado" : h.status === "incompleto" ? "Falta documento" : "Reprovado"}
                     </span>
                   )}
                 </button>
@@ -280,36 +281,68 @@ export default function Credito({ goTo }) {
             <button style={{ ...S.ghostBtn, marginTop: 14, fontSize: 11.5 }} onClick={() => { setCurrent(null); setError(null); }}>← Nova consulta</button>
           </div>
 
-          {!current.hasFinancials && (
+          {current.hasFinancials && current.status && (() => {
+            const ok = current.status === "aprovado";
+            const pend = current.status === "incompleto";
+            const tone = ok ? { bg: C.sageSoft, fg: C.sage } : pend ? { bg: C.goldSoft, fg: "#8A6423" } : { bg: C.dangerSoft, fg: C.danger };
+            const dados = [
+              ["Receita do período", current.receita],
+              ["Lucro líquido", current.lucroLiquido],
+              ["Ativo circulante", current.ativoCirculante],
+              ["Passivo circulante", current.passivoCirculante],
+              ["Dívidas totais (passivo exigível)", current.passivoTotal],
+              ["Patrimônio líquido", current.patrimonioLiquido],
+            ];
+            return (
+              <div style={{ background: tone.bg, borderRadius: 14, padding: 24, display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {ok ? <CheckCircle2 size={22} color={C.sage} /> : pend ? <AlertTriangle size={22} color="#8A6423" /> : <XCircle size={22} color={C.danger} />}
+                  <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, color: tone.fg }}>
+                    {ok ? "Crédito recomendado" : pend ? "Falta um documento" : "Crédito não recomendado"}
+                  </div>
+                </div>
+                {ok ? (
+                  <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 28, color: C.ink }}>{fmtBRL(current.limiteSugerido)}</div>
+                ) : (
+                  <p style={{ fontSize: 13, color: C.inkSoft, margin: 0 }}>{current.motivoRecusa}</p>
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "4px 16px", marginTop: 4 }}>
+                  {dados.map(([label, v]) => (
+                    <div key={label} style={{ fontSize: 11.5, color: C.inkSoft, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                      <span>{label}</span><span style={{ fontWeight: 600, color: v == null ? C.muted : C.ink }}>{v == null ? "não encontrado" : fmtBRL(v)}</span>
+                    </div>
+                  ))}
+                </div>
+                {ok && (
+                  <div style={{ fontSize: 11, color: C.muted }}>
+                    {current.mesesPeriodo ? `DRE de ${current.mesesPeriodo} meses.` : "O período da DRE não está no documento — o cálculo considerou 12 meses (o lado mais conservador)."}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Upload SEMPRE disponível: aceita vários PDFs de uma vez (Balanço e DRE) e, depois de uma
+              análise pronta, novos documentos recalculam o limite com os dados mais recentes. */}
+          {(() => {
+            const pronta = current.hasFinancials && current.status && current.status !== "incompleto";
+            return (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
-              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15 }}>Análise Avançada (opcional)</div>
-              <p style={{ fontSize: 12.5, color: C.inkSoft, margin: 0 }}>Suba o balanço patrimonial e/ou DRE (PDF) do cliente para receber uma sugestão de limite de crédito.</p>
-              <label style={{ ...S.primaryBtnSm, cursor: "pointer" }}>
-                <Upload size={13} /> {uploadingBalanco ? "Analisando..." : "Subir balanço (PDF)"}
-                <input type="file" accept="application/pdf" onChange={handleBalanco} style={{ display: "none" }} disabled={uploadingBalanco} />
+              <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 15 }}>{pronta ? "Atualizar a análise" : "Análise Avançada (opcional)"}</div>
+              <p style={{ fontSize: 12.5, color: C.inkSoft, margin: 0 }}>
+                {pronta
+                  ? <>Chegou um Balanço ou uma DRE mais recente? Envie aqui: os números novos substituem os antigos do mesmo documento e o limite sugerido é recalculado.</>
+                  : <>Envie o <b>Balanço Patrimonial</b> e a <b>DRE</b> do cliente em PDF para receber uma sugestão de limite de crédito. Pode selecionar vários arquivos de uma vez.</>}
+              </p>
+              <label style={{ ...(pronta ? S.ghostBtn : S.primaryBtnSm), display: "inline-flex", alignItems: "center", gap: 6, cursor: uploadingBalanco ? "default" : "pointer", opacity: uploadingBalanco ? 0.6 : 1 }}>
+                <Upload size={13} /> {uploadingBalanco ? "Lendo os documentos..." : pronta ? "Enviar documentos novos (PDF)" : current.status === "incompleto" ? "Enviar o documento que falta (PDF)" : "Enviar Balanço e DRE (PDF)"}
+                <input type="file" accept="application/pdf" multiple onChange={handleBalanco} style={{ display: "none" }} disabled={uploadingBalanco} />
               </label>
+              {uploadingBalanco && <div style={{ fontSize: 11.5, color: C.muted }}>A leitura por IA leva de 10 a 30 segundos por documento.</div>}
               {error && <div style={{ color: C.danger, fontSize: 12 }}>{error}</div>}
             </div>
-          )}
-
-          {current.hasFinancials && current.status && (
-            <div style={{ background: current.status === "aprovado" ? C.sageSoft : C.dangerSoft, borderRadius: 14, padding: 24, display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                {current.status === "aprovado" ? <CheckCircle2 size={22} color={C.sage} /> : <XCircle size={22} color={C.danger} />}
-                <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18, color: current.status === "aprovado" ? C.sage : C.danger }}>
-                  {current.status === "aprovado" ? "Crédito recomendado" : "Crédito não recomendado"}
-                </div>
-              </div>
-              {current.status === "aprovado" ? (
-                <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 28, color: C.ink }}>{fmtBRL(current.limiteSugerido)}</div>
-              ) : (
-                <p style={{ fontSize: 13, color: C.inkSoft, margin: 0 }}>{current.motivoRecusa}</p>
-              )}
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
-                Receita: {current.receita ? fmtBRL(current.receita) : "—"} · Lucro líquido: {current.lucroLiquido ? fmtBRL(current.lucroLiquido) : "—"}
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
       </>
