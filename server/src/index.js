@@ -20,6 +20,7 @@ import chatRoutes from "./routes/chat.js";
 import dreRoutes from "./routes/dre.js";
 import adminRoutes from "./routes/admin.js";
 import whatsappRoutes from "./routes/whatsapp.js";
+import statsRoutes from "./routes/stats.js";
 import { requireAuth, requirePlatformAdmin } from "./middleware/auth.js";
 import { runFollowUpCheck } from "./jobs/followUp.js";
 import { runCnpjMonitorCheck } from "./jobs/monitorCnpj.js";
@@ -126,6 +127,8 @@ app.use("/api/dre", requireAuth, dreRoutes);
 app.use("/api/admin", requireAuth, requirePlatformAdmin, adminRoutes);
 // Sem requireAuth — é o Twilio chamando, autenticado pela assinatura dentro da própria rota.
 app.use("/api/whatsapp", whatsappRoutes);
+// Sem requireAuth — o painel de desempenho (done-social) consulta com o token STATS_TOKEN.
+app.use("/api/stats", statsRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
