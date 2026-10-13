@@ -24,6 +24,7 @@ import { requireAuth, requirePlatformAdmin } from "./middleware/auth.js";
 import { runFollowUpCheck } from "./jobs/followUp.js";
 import { runCnpjMonitorCheck } from "./jobs/monitorCnpj.js";
 import { runWeeklyReportCheck } from "./jobs/weeklyReport.js";
+import { runZerarConta } from "./jobs/zerarConta.js";
 
 const app = express();
 
@@ -134,4 +135,7 @@ app.use((err, req, res, next) => {
 
 const port = process.env.PORT || 4000;
 app.listen(port, () => console.log(`D.O.N.E API rodando na porta ${port}`));
+
+// Rotina de uso único para zerar os dados de uma conta (ver jobs/zerarConta.js). Sem as variáveis, não faz nada.
+runZerarConta().catch((e) => console.error("[zerar-conta] falhou, nada foi apagado:", e));
 
