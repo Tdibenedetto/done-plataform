@@ -55,6 +55,8 @@ model User {
   createdAt      DateTime     @default(now())
   lastLoginAt    DateTime?    // atualizado a cada login — usado para saúde de uso no painel Admin Geral
   sortimentoAbcCriterio String @default("giro") // "giro" (volume) | "faturamento" — lembrado por usuário, não por organização
+  area           String?      // área do colaborador: "vendas" | "produtos" | "marketing" | "administrativo" | "financeiro" | "logistica" | "diretoria" | "outra"
+  modulos        Json?        // módulos que o membro pode ver (lista). null = padrão antigo (Coach, Vendas, Crédito). O master vê tudo.
 
   assignedLeads Lead[]
   goals         Goal[]
@@ -87,6 +89,8 @@ model Invite {
   email          String
   token          String       @unique
   status         String       @default("pending") // "pending" | "accepted"
+  area           String?      // área escolhida pelo master no convite (copiada para o usuário ao aceitar)
+  modulos        Json?        // módulos liberados no convite (copiados para o usuário ao aceitar)
   createdAt      DateTime     @default(now())
   expiresAt      DateTime
 
@@ -176,8 +180,8 @@ model LeadNote {
   id        String   @id @default(uuid())
   leadId    String
   lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String?  // fica vazio se o autor for removido da equipe — a nota continua no lead
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
   content   String
   createdAt DateTime @default(now())
 
@@ -299,8 +303,8 @@ model CreditAnalysis {
   id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  requestedById  String
-  requestedBy    User         @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+  requestedById  String?      // fica vazio se quem pediu sair da equipe — a análise continua na empresa
+  requestedBy    User?        @relation(fields: [requestedById], references: [id], onDelete: SetNull)
   clienteId      String?      // vínculo com o Cliente (Gestão de Crédito) — cada análise nova encontra ou cria o Cliente pelo CNPJ
   cliente        Cliente?     @relation(fields: [clienteId], references: [id], onDelete: SetNull)
 

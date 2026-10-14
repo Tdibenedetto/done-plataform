@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma.js";
+import { modulosDoUsuario } from "../lib/acessos.js";
 
 export async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
@@ -12,10 +13,19 @@ export async function requireAuth(req, res, next) {
     req.userId = user.id;
     req.organizationId = user.organizationId;
     req.userRole = user.role;
+    req.userModulos = modulosDoUsuario(user);
     next();
   } catch (e) {
     return res.status(401).json({ error: "Sessão inválida ou expirada." });
   }
+}
+
+// O master libera para cada colaborador os módulos que ele pode ver. O master vê tudo.
+export function requireAccess(modulo) {
+  return (req, res, next) => {
+    if (req.userRole === "master" || (req.userModulos || []).includes(modulo)) return next();
+    return res.status(403).json({ code: "no_access", error: "O seu acesso a esta área não foi liberado. Peça ao administrador da conta." });
+  };
 }
 
 export function requireMaster(req, res, next) {

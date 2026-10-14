@@ -1,7 +1,7 @@
 import React, { Component, useState, useEffect } from "react";
 import {
   Activity, Trello, BarChart2, LayoutGrid, Eye, EyeOff,
-  ShieldCheck, Menu, X, ChevronRight, CreditCard, LifeBuoy, Wallet, Building2, Tag, Package,
+  ShieldCheck, Menu, X, ChevronRight, CreditCard, LifeBuoy, Wallet, Building2, Tag, Package, Users, Lock,
 } from "lucide-react";
 import { C, S, FONT_DISPLAY, FONT_IMPORT, RESPONSIVE_CSS } from "./theme.js";
 import { api, saveSession, loadSession, clearSession } from "./lib/api.js";
@@ -15,6 +15,7 @@ import AdminOverview from "./modules/AdminOverview.jsx";
 import Planos from "./modules/Planos.jsx";
 import Suporte from "./modules/Suporte.jsx";
 import Dre from "./modules/Dre.jsx";
+import Equipe from "./modules/Equipe.jsx";
 import ChatWidget from "./components/ChatWidget.jsx";
 
 // Evita que um erro de renderização em UM módulo derrube a tela inteira em branco —
@@ -82,6 +83,19 @@ export default function App() {
     if (session) api.coachLatest().then(setCoachResult).catch(() => setCoachResult(null));
   }, [session]);
 
+  // Atualiza área e módulos liberados ao abrir o app — se o master mudou os acessos de alguém,
+  // o menu dessa pessoa já reflete a mudança, sem precisar sair e entrar de novo.
+  useEffect(() => {
+    if (!session) return;
+    api.teamMe().then((me) => {
+      const user = { ...session.user, name: me.name, role: me.role, area: me.area, modulos: me.modulos };
+      if (JSON.stringify(user) !== JSON.stringify(session.user)) {
+        saveSession(session.token, user);
+        setSession({ token: session.token, user });
+      }
+    }).catch(() => {});
+  }, [session?.token]);
+
   function enter(token, user) {
     saveSession(token, user);
     setSession({ token, user });
@@ -146,6 +160,7 @@ export default function App() {
 
       <div className="done-content-wrap" style={S.content}>
         <ErrorBoundary>
+          {!canSee(session.user, activeModule) ? <NoAccess goTo={goTo} /> : <>
           {activeModule === "overview" && <VisaoGeral coachResult={coachResult} goTo={goTo} />}
           {activeModule === "coach" && <ComercialCoach goTo={goTo} onResult={setCoachResult} />}
           {activeModule === "vendas" && <FerramentaVendas goTo={goTo} />}
@@ -156,6 +171,8 @@ export default function App() {
           {activeModule === "suporte" && session.user.isPlatformAdmin && <Suporte />}
           {activeModule === "dre" && <Dre goTo={goTo} />}
           {activeModule === "admin" && <AdminOverview />}
+          {activeModule === "equipe" && session.user.role === "master" && <Equipe />}
+          </>}
         </ErrorBoundary>
       </div>
 
@@ -513,21 +530,43 @@ function MiniRadar({ coachResult }) {
   );
 }
 
+// Módulos que dependem de liberação do master. Visão Geral, Planos e o resto não entram aqui.
+const MODULOS_LIBERAVEIS = ["coach", "vendas", "gestao", "credito", "sortimento", "dre"];
+const MODULOS_PADRAO_MEMBRO = ["coach", "vendas", "credito"]; // sessões antigas, sem a lista ainda
+const AREA_NOME = { vendas: "Vendas", produtos: "Produtos", marketing: "Marketing", administrativo: "Administrativo", financeiro: "Financeiro", logistica: "Logística", diretoria: "Diretoria", outra: "Colaborador" };
+function canSee(user, key) {
+  if (!MODULOS_LIBERAVEIS.includes(key) || user?.role === "master") return true;
+  return (Array.isArray(user?.modulos) ? user.modulos : MODULOS_PADRAO_MEMBRO).includes(key);
+}
+
+function NoAccess({ goTo }) {
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 32, display: "flex", flexDirection: "column", gap: 12, alignItems: "center", textAlign: "center", maxWidth: 460, margin: "40px auto" }}>
+      <div style={{ width: 46, height: 46, borderRadius: "50%", background: C.goldSoft, display: "flex", alignItems: "center", justifyContent: "center" }}><Lock size={20} color="#8A6423" /></div>
+      <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 700, fontSize: 18 }}>Área não liberada para você</div>
+      <p style={{ fontSize: 13, color: C.inkSoft, lineHeight: 1.55, margin: 0 }}>O administrador da conta escolhe o que cada pessoa da equipe pode ver. Se você precisa desta área, peça a liberação a ele.</p>
+      <button style={S.primaryBtn} onClick={() => goTo("overview")}>Voltar para a Visão Geral</button>
+    </div>
+  );
+}
+
 function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen, onCloseMobile }) {
   const isMaster = profile.role === "master";
   const items = [
     { key: "overview", label: "Visão Geral", icon: LayoutGrid },
     { key: "coach", label: "Comercial Coach", icon: Activity },
     { key: "vendas", label: "Ferramenta de Vendas", icon: Trello },
-    ...(isMaster ? [{ key: "gestao", label: "Ferramenta de Gestão", icon: BarChart2 }] : []),
+    { key: "gestao", label: "Ferramenta de Gestão", icon: BarChart2 },
     { key: "credito", label: "Análise de Crédito", icon: CreditCard },
-    ...(isMaster ? [{ key: "sortimento", label: "Gestão de Sortimento", icon: Package }] : []),
-    ...(isMaster ? [{ key: "dre", label: "DRE / Fluxo de Caixa", icon: Wallet }] : []),
+    { key: "sortimento", label: "Gestão de Sortimento", icon: Package },
+    { key: "dre", label: "DRE / Fluxo de Caixa", icon: Wallet },
+  ].filter((it) => canSee(profile, it.key)).concat([
+    ...(isMaster ? [{ key: "equipe", label: "Equipe e acessos", icon: Users }] : []),
     { key: "planos", label: "Planos", icon: Tag },
     // Caixa de entrada do suporte: só o time D.O.N.E (Admin Geral) atende. Clientes falam pelo chat.
     ...(profile.isPlatformAdmin ? [{ key: "suporte", label: "Suporte", icon: LifeBuoy }] : []),
     ...(profile.isPlatformAdmin ? [{ key: "admin", label: "Admin Geral", icon: Building2 }] : []),
-  ];
+  ]);
 
   const dims = coachResult ? [
     { key: "processo", label: "Processo", v: coachResult.dimProcesso },
@@ -605,7 +644,7 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile.name}</div>
-          <div style={{ fontSize: 10.5, color: "#6E7484" }}>{profile.role === "master" ? "Administrador" : "Vendedor"}</div>
+          <div style={{ fontSize: 10.5, color: "#6E7484" }}>{profile.role === "master" ? "Administrador" : AREA_NOME[profile.area] || "Colaborador"}</div>
         </div>
         <button onClick={onLogout} style={{ background: "none", border: "none", color: "#6E7484", cursor: "pointer", fontSize: 11 }}>Sair</button>
       </div>

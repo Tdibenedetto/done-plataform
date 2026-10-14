@@ -9,7 +9,8 @@ const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 // Dado financeiro é sensível — só o Master vê, e só quem tem o add-on DRE ativo (exige Gestão/Completo como base).
-router.use(requireMaster, requireAddon("dre", ["gestao", "completo"]));
+// Quem entra é decidido pelo master na tela Equipe (módulo "dre"), conferido em index.js.
+router.use(requireAddon("dre", ["gestao", "completo"]));
 
 const TYPES = ["receita", "cmv", "despesa", "imposto"];
 const CANONICAL_HEADERS = ["mes", "tipo", "categoria", "valor"];

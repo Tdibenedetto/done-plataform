@@ -122,7 +122,9 @@ export function clearSession() {
 // Equipe / convites (adicionado na evolução multiusuário)
 Object.assign(api, {
   teamGet: () => request("/team"),
-  teamInvite: (email) => request("/team/invite", { method: "POST", body: { email } }),
+  teamInvite: (email, area, modulos) => request("/team/invite", { method: "POST", body: { email, area, modulos } }),
+  teamUpdateMember: (id, data) => request(`/team/member/${id}`, { method: "PATCH", body: data }),
+  teamMe: () => request("/team/me"),
   teamRevokeInvite: (id) => request(`/team/invite/${id}`, { method: "DELETE" }),
   teamRemoveMember: (id) => request(`/team/member/${id}`, { method: "DELETE" }),
   inviteInfo: (token) => request(`/auth/invite/${token}`),

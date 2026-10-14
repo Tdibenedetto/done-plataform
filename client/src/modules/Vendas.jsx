@@ -211,7 +211,7 @@ export default function FerramentaVendas({ goTo }) {
         </div>
       )}
 
-      {showTeam && <TeamPanel team={team} isMaster={isMaster} onChange={reload} />}
+      {showTeam && <TeamPanel team={team} isMaster={isMaster} onChange={reload} goTo={goTo} />}
       {showForecast && <ForecastPanel leads={leads} />}
       {showMetrics && <MetricsPanel leads={leads} />}
       {showAnnual && <AnnualGoalsPanel team={team} goals={goals} leads={leads} isMaster={isMaster} onChange={reload} />}
@@ -1018,11 +1018,8 @@ function LogoPreview({ url }) {
   );
 }
 
-function TeamPanel({ team, isMaster, onChange }) {
+function TeamPanel({ team, isMaster, onChange, goTo }) {
   const me = team.users.find((u) => u.id === loadSession().user.id);
-  const [email, setEmail] = useState("");
-  const [msg, setMsg] = useState(null);
-  const [busy, setBusy] = useState(false);
   const [phone, setPhone] = useState(me?.phone || "");
   const [phoneMsg, setPhoneMsg] = useState(null);
   const [savingPhone, setSavingPhone] = useState(false);
@@ -1036,23 +1033,6 @@ function TeamPanel({ team, isMaster, onChange }) {
   const [testingWeekly, setTestingWeekly] = useState(false);
   const [weeklyMsg, setWeeklyMsg] = useState(null);
 
-  async function invite() {
-    if (!email.trim()) return;
-    setBusy(true);
-    setMsg(null);
-    try {
-      const r = await api.teamInvite(email.trim());
-      setMsg(r.emailSent ? "Convite enviado por e-mail." : `E-mail não configurado — copie o link: ${r.inviteLink}`);
-      setEmail("");
-      onChange();
-    } catch (e) {
-      setMsg(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function revoke(id) { await api.teamRevokeInvite(id); onChange(); }
-  async function remove(id) { await api.teamRemoveMember(id); onChange(); }
 
   async function savePhone() {
     setSavingPhone(true);
@@ -1181,32 +1161,18 @@ function TeamPanel({ team, isMaster, onChange }) {
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {team.users.map((u) => (
-          <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
-            <span>{u.name} <span style={{ color: C.muted }}>· {u.email} · {u.role === "master" ? "Master" : "Vendedor"}{u.phone ? " · WhatsApp configurado" : ""}</span></span>
-            {isMaster && u.role !== "master" && (
-              <button style={{ ...S.moveBtn, color: C.danger }} onClick={() => remove(u.id)}><Trash2 size={10} /></button>
-            )}
-          </div>
-        ))}
-        {isMaster && team.invites.map((inv) => (
-          <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, color: C.muted }}>
-            <span><Mail size={11} style={{ verticalAlign: -1, marginRight: 4 }} />{inv.email} · convite pendente</span>
-            <button style={S.moveBtn} onClick={() => revoke(inv.id)}><X size={10} /></button>
-          </div>
-        ))}
-      </div>
-
-      {isMaster && (slotsLeft > 0 ? (
-        <div style={{ display: "flex", gap: 8 }}>
-          <input style={{ ...S.input, flex: 1 }} placeholder="E-mail do vendedor" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <button style={S.primaryBtnSm} disabled={busy} onClick={invite}>{busy ? "Enviando..." : "Convidar"}</button>
+      {isMaster ? (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+          <span style={{ fontSize: 12.5, color: C.inkSoft }}>{team.users.length} {team.users.length === 1 ? "pessoa" : "pessoas"} na equipe{team.invites.length ? ` · ${team.invites.length} convite(s) pendente(s)` : ""}</span>
+          <button style={S.primaryBtnSm} onClick={() => goTo && goTo("equipe")}>Gerenciar equipe e acessos →</button>
         </div>
       ) : (
-        <div style={{ fontSize: 12, color: C.muted }}>Vagas do plano esgotadas.</div>
-      ))}
-      {msg && <div style={{ fontSize: 11.5, color: C.inkSoft, wordBreak: "break-all" }}>{msg}</div>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {team.users.map((u) => (
+            <div key={u.id} style={{ fontSize: 12.5 }}>{u.name} <span style={{ color: C.muted }}>· {u.email}{u.role === "master" ? " · Administrador" : ""}</span></div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

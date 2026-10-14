@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { prisma } from "../lib/prisma.js";
 import { sendPasswordResetEmail } from "../lib/mailer.js";
+import { modulosDoUsuario } from "../lib/acessos.js";
 
 const router = Router();
 
@@ -18,6 +19,7 @@ function publicUser(user, organization) {
   return {
     id: user.id, email: user.email, name: user.name, role: user.role,
     organizationId: user.organizationId, company: organization?.name,
+    area: user.area || null, modulos: modulosDoUsuario(user),
     isPlatformAdmin: !!process.env.PLATFORM_ADMIN_EMAIL && user.email.toLowerCase() === process.env.PLATFORM_ADMIN_EMAIL.toLowerCase(),
   };
 }
@@ -168,7 +170,10 @@ router.post("/invite/:token/accept", async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
-    data: { email, passwordHash, name, role: "member", organizationId: invite.organizationId, lastLoginAt: new Date() },
+    data: {
+      email, passwordHash, name, role: "member", organizationId: invite.organizationId, lastLoginAt: new Date(),
+      area: invite.area || null, ...(Array.isArray(invite.modulos) ? { modulos: invite.modulos } : {}),
+    },
   });
   await prisma.invite.update({ where: { id: invite.id }, data: { status: "accepted" } });
   const organization = await prisma.organization.findUnique({ where: { id: invite.organizationId } });

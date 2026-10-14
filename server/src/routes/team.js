@@ -6,6 +6,7 @@ import { sendInviteEmail } from "../lib/mailer.js";
 import { MAX_TEAM_SIZE, normalizeEmail } from "./auth.js";
 import { runFollowUpCheck } from "../jobs/followUp.js";
 import { runWeeklyReportCheck } from "../jobs/weeklyReport.js";
+import { limparArea, limparModulos, modulosDoUsuario } from "../lib/acessos.js";
 
 const router = Router();
 
@@ -13,15 +14,29 @@ const router = Router();
 router.get("/", async (req, res) => {
   const users = await prisma.user.findMany({
     where: { organizationId: req.organizationId },
-    select: { id: true, name: true, email: true, role: true, phone: true, createdAt: true },
+    select: { id: true, name: true, email: true, role: true, phone: true, createdAt: true, lastLoginAt: true, area: true, modulos: true },
     orderBy: { createdAt: "asc" },
   });
   const invites = await prisma.invite.findMany({
     where: { organizationId: req.organizationId, status: "pending" },
-    select: { id: true, email: true, createdAt: true, expiresAt: true },
+    select: { id: true, email: true, createdAt: true, expiresAt: true, area: true, modulos: true },
   });
+  // Só o master vê os acessos de cada um; os demais recebem só o necessário para o pipeline.
+  const isMaster = req.userRole === "master";
+  const usersOut = users.map((u) => ({
+    id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone, createdAt: u.createdAt, area: u.area || null,
+    ...(isMaster ? { lastLoginAt: u.lastLoginAt, modulos: modulosDoUsuario(u) } : {}),
+  }));
+  const invitesOut = isMaster ? invites.map((i) => ({ ...i, area: i.area || null, modulos: limparModulos(i.modulos) || [] })) : [];
   const org = await prisma.organization.findUnique({ where: { id: req.organizationId }, select: { followUpDays: true, followUpError: true, followUpErrorAt: true, logoUrl: true } });
-  res.json({ users, invites, maxTeamSize: MAX_TEAM_SIZE, followUpDays: org.followUpDays, followUpError: org.followUpError, followUpErrorAt: org.followUpErrorAt, logoUrl: org.logoUrl });
+  res.json({ users: usersOut, invites: invitesOut, maxTeamSize: MAX_TEAM_SIZE, followUpDays: org.followUpDays, followUpError: org.followUpError, followUpErrorAt: org.followUpErrorAt, logoUrl: org.logoUrl });
+});
+
+// Dados do próprio usuário, com os módulos liberados — o app consulta ao abrir, para o menu
+// refletir na hora uma mudança de acesso feita pelo master.
+router.get("/me", async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.userId } });
+  res.json({ id: user.id, name: user.name, email: user.email, role: user.role, area: user.area || null, modulos: modulosDoUsuario(user) });
 });
 
 // Cada usuário define o próprio telefone (E.164), usado nos lembretes automáticos de follow-up.
@@ -106,6 +121,10 @@ router.post("/weekly-report-test", requireMaster, async (req, res) => {
 router.post("/invite", requireMaster, async (req, res) => {
   const email = normalizeEmail(req.body.email);
   if (!email) return res.status(400).json({ error: "E-mail é obrigatório." });
+  const area = limparArea(req.body.area);
+  if (!area) return res.status(400).json({ error: "Escolha a área do colaborador." });
+  const modulos = limparModulos(req.body.modulos);
+  if (!modulos || !modulos.length) return res.status(400).json({ error: "Marque pelo menos um módulo que o colaborador vai poder ver." });
 
   const [userCount, pendingCount, existingUser] = await Promise.all([
     prisma.user.count({ where: { organizationId: req.organizationId } }),
@@ -119,7 +138,7 @@ router.post("/invite", requireMaster, async (req, res) => {
 
   const token = crypto.randomBytes(24).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias
-  await prisma.invite.create({ data: { organizationId: req.organizationId, email, token, expiresAt } });
+  await prisma.invite.create({ data: { organizationId: req.organizationId, email, token, expiresAt, area, modulos } });
 
   const inviter = await prisma.user.findUnique({ where: { id: req.userId } });
   const org = await prisma.organization.findUnique({ where: { id: req.organizationId } });
@@ -131,6 +150,27 @@ router.post("/invite", requireMaster, async (req, res) => {
 router.delete("/invite/:id", requireMaster, async (req, res) => {
   await prisma.invite.deleteMany({ where: { id: req.params.id, organizationId: req.organizationId } });
   res.json({ ok: true });
+});
+
+// O master muda a área e os módulos de um colaborador. Para si mesmo, só a área (o master vê tudo).
+router.patch("/member/:id", requireMaster, async (req, res) => {
+  const user = await prisma.user.findFirst({ where: { id: req.params.id, organizationId: req.organizationId } });
+  if (!user) return res.status(404).json({ error: "Usuário não encontrado." });
+  const data = {};
+  if (req.body.area !== undefined) {
+    const area = limparArea(req.body.area);
+    if (!area) return res.status(400).json({ error: "Escolha uma área válida." });
+    data.area = area;
+  }
+  if (req.body.modulos !== undefined) {
+    if (user.role === "master") return res.status(400).json({ error: "O administrador da conta sempre vê todos os módulos." });
+    const modulos = limparModulos(req.body.modulos);
+    if (!modulos || !modulos.length) return res.status(400).json({ error: "Marque pelo menos um módulo." });
+    data.modulos = modulos;
+  }
+  if (!Object.keys(data).length) return res.status(400).json({ error: "Nada para alterar." });
+  const u = await prisma.user.update({ where: { id: user.id }, data });
+  res.json({ ok: true, user: { id: u.id, area: u.area, modulos: modulosDoUsuario(u) } });
 });
 
 router.delete("/member/:id", requireMaster, async (req, res) => {
