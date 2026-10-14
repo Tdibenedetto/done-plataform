@@ -11,7 +11,8 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 // Antes desta linha, este módulo não checava plano nenhum, e só a rota de metas exigia
 // Master — o upload de planilha (o núcleo do módulo) estava aberto pra qualquer membro
 // de qualquer organização, mesmo sem assinatura. Gestão é Master-only por regra de negócio.
-router.use(requireMaster, requirePlan(["gestao", "completo"]));
+// Quem entra é decidido pelo master na tela Equipe (módulo "gestao"), conferido em index.js.
+router.use(requirePlan(["gestao", "completo"]));
 
 const CANONICAL_HEADERS = ["mes", "categoria", "produto", "sku", "valor", "margem", "estoque"];
 

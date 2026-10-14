@@ -20,7 +20,7 @@ import chatRoutes from "./routes/chat.js";
 import dreRoutes from "./routes/dre.js";
 import adminRoutes from "./routes/admin.js";
 import whatsappRoutes from "./routes/whatsapp.js";
-import { requireAuth, requirePlatformAdmin } from "./middleware/auth.js";
+import { requireAuth, requirePlatformAdmin, requireAccess } from "./middleware/auth.js";
 import { runFollowUpCheck } from "./jobs/followUp.js";
 import { runCnpjMonitorCheck } from "./jobs/monitorCnpj.js";
 import { runWeeklyReportCheck } from "./jobs/weeklyReport.js";
@@ -110,20 +110,20 @@ app.use((req, res, next) => {
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.use("/api/auth", authRoutes);
-app.use("/api/coach", requireAuth, coachRoutes);
-app.use("/api/leads", requireAuth, leadsRoutes);
-app.use("/api/goals", requireAuth, goalsRoutes);
-app.use("/api/gestao", requireAuth, gestaoRoutes);
+app.use("/api/coach", requireAuth, requireAccess("coach"), coachRoutes);
+app.use("/api/leads", requireAuth, requireAccess("vendas"), leadsRoutes);
+app.use("/api/goals", requireAuth, requireAccess("vendas"), goalsRoutes);
+app.use("/api/gestao", requireAuth, requireAccess("gestao"), gestaoRoutes);
 app.use("/api/billing", (req, res, next) => (req.path === "/webhook" ? next() : requireAuth(req, res, next)), billingRoutes);
-app.use("/api/alerts", requireAuth, alertsRoutes);
+app.use("/api/alerts", requireAuth, requireAccess("vendas"), alertsRoutes);
 app.use("/api/team", requireAuth, teamRoutes);
-app.use("/api/credito", requireAuth, creditoRoutes);
-app.use("/api/clientes", requireAuth, clientesRoutes);
-app.use("/api/grupos", requireAuth, gruposRoutes);
-app.use("/api/produtos", requireAuth, produtosRoutes);
+app.use("/api/credito", requireAuth, requireAccess("credito"), creditoRoutes);
+app.use("/api/clientes", requireAuth, requireAccess("credito"), clientesRoutes);
+app.use("/api/grupos", requireAuth, requireAccess("credito"), gruposRoutes);
+app.use("/api/produtos", requireAuth, requireAccess("sortimento"), produtosRoutes);
 app.use(tabelaPublicaViewRoutes); // pública, sem requireAuth — é a tabela que o cliente final acessa
 app.use("/api/chat", requireAuth, chatRoutes);
-app.use("/api/dre", requireAuth, dreRoutes);
+app.use("/api/dre", requireAuth, requireAccess("dre"), dreRoutes);
 app.use("/api/admin", requireAuth, requirePlatformAdmin, adminRoutes);
 // Sem requireAuth — é o Twilio chamando, autenticado pela assinatura dentro da própria rota.
 app.use("/api/whatsapp", whatsappRoutes);
