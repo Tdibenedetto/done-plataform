@@ -561,7 +561,7 @@ function Sidebar({ active, setActive, profile, onLogout, coachResult, mobileOpen
     { key: "sortimento", label: "Gestão de Sortimento", icon: Package },
     { key: "dre", label: "DRE / Fluxo de Caixa", icon: Wallet },
   ].filter((it) => canSee(profile, it.key)).concat([
-    ...(isMaster ? [{ key: "equipe", label: "Equipe e acessos", icon: Users }] : []),
+    ...(isMaster ? [{ key: "equipe", label: "Equipe e Acessos", icon: Users }] : []),
     { key: "planos", label: "Planos", icon: Tag },
     // Caixa de entrada do suporte: só o time D.O.N.E (Admin Geral) atende. Clientes falam pelo chat.
     ...(profile.isPlatformAdmin ? [{ key: "suporte", label: "Suporte", icon: LifeBuoy }] : []),
