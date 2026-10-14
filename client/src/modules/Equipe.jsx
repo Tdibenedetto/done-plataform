@@ -126,7 +126,7 @@ export default function Equipe() {
     <div style={S.moduleCol}>
       <div>
         <div style={S.eyebrow}>EQUIPE</div>
-        <h1 style={S.h1}>Equipe e acessos</h1>
+        <h1 style={S.h1}>Equipe e Acessos</h1>
         <p style={S.lead}>Cadastre cada colaborador com a área em que trabalha e escolha o que ele pode ver. Quem saiu da empresa, remova aqui: o acesso acaba na hora.</p>
       </div>
 
